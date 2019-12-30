@@ -31,13 +31,13 @@ import (
 const (
 	// DefaultK8sServiceAccount is the default name of the Kubernetes
 	// service account for csi controller.
-	DefaultK8sServiceAccount string = "vsphere-csi-controller"
+	DefaultK8sServiceAccount string = "ics-csi-controller"
 	// DefaultVCenterPort is the default port used to access vCenter.
 	DefaultVCenterPort string = "443"
 	// DefaultCloudConfigPath is the default path of csi config file
-	DefaultCloudConfigPath = "/etc/cloud/csi-vsphere.conf"
+	DefaultCloudConfigPath = "/etc/ics/icsphere-csi.conf"
 	// EnvCloudConfig contains the path to the CSI vSphere Config
-	EnvCloudConfig = "VSPHERE_CSI_CONFIG"
+	EnvCloudConfig = "ICSPHERE_CSI_CONFIG"
 )
 
 // Errors
