@@ -21,9 +21,8 @@ import (
 	"flag"
 	"github.com/rexray/gocsi"
 	"k8s.io/klog"
-
-	"ics-csi-driver/pkg/csi/provider"
-	"ics-csi-driver/pkg/csi/service"
+	"github.com/inspur-ics/ics-csi-driver/pkg/csi/provider"
+	"github.com/inspur-ics/ics-csi-driver/pkg/csi/service"
 )
 
 // main is ignored when this package is built as a go plug-in.
