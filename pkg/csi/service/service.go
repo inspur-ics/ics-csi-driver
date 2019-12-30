@@ -107,7 +107,7 @@ func (s *service) BeforeServe(
 			klog.Errorf("Failed to init controller. Error: %v", err)
 			return err
 		}
-		klog.V(2).Infof("csi-config:%v", cfg)
+		klog.V(2).Infof("csi-config:%+v", cfg)
 	}
 	return nil
 }

@@ -69,14 +69,16 @@ func (c *controller) Init(config *config.Config) error {
 func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequest) (
 	*csi.CreateVolumeResponse, error) {
 
-	return nil, nil
+	klog.V(4).Infof("CreateVolume: called with args %+v", *req)
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 // CreateVolume is deleting CNS Volume specified in DeleteVolumeRequest
 func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequest) (
 	*csi.DeleteVolumeResponse, error) {
 
-	return nil, nil
+	klog.V(4).Infof("DeleteVolume: called with args %+v", *req)
+        return nil, status.Error(codes.Unimplemented, "")
 }
 
 // ControllerPublishVolume attaches a volume to the Node VM.
@@ -84,7 +86,8 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (
 	*csi.ControllerPublishVolumeResponse, error) {
 
-	return nil, nil
+	klog.V(4).Infof("ControllerPublishVolume: called with args %+v", *req)
+        return nil, status.Error(codes.Unimplemented, "")
 }
 
 // ControllerUnpublishVolume detaches a volume from the Node VM.
@@ -92,14 +95,16 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.ControllerUnpublishVolumeRequest) (
 	*csi.ControllerUnpublishVolumeResponse, error) {
 
-	return nil, nil
+	klog.V(4).Infof("ControllerUnpublishVolume: called with args %+v", *req)
+        return nil, status.Error(codes.Unimplemented, "")
 }
 
 // ValidateVolumeCapabilities returns the capabilities of the volume.
 func (c *controller) ValidateVolumeCapabilities(ctx context.Context, req *csi.ValidateVolumeCapabilitiesRequest) (
 	*csi.ValidateVolumeCapabilitiesResponse, error) {
 
-	return nil, nil
+	klog.V(4).Infof("ValidateVolumeCapabilities: called with args %+v", *req)
+        return nil, status.Error(codes.Unimplemented, "")
 }
 
 func (c *controller) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (
@@ -119,7 +124,19 @@ func (c *controller) GetCapacity(ctx context.Context, req *csi.GetCapacityReques
 func (c *controller) ControllerGetCapabilities(ctx context.Context, req *csi.ControllerGetCapabilitiesRequest) (
 	*csi.ControllerGetCapabilitiesResponse, error) {
 
-	return nil, nil
+	klog.V(4).Infof("ControllerGetCapabilities: called with args %+v", *req)
+	var caps []*csi.ControllerServiceCapability
+	for _, cap := range controllerCaps {
+		c := &csi.ControllerServiceCapability{
+			Type: &csi.ControllerServiceCapability_Rpc{
+				Rpc: &csi.ControllerServiceCapability_RPC{
+					Type: cap,
+				},
+			},
+		}
+		caps = append(caps, c)
+	}
+	return &csi.ControllerGetCapabilitiesResponse{Capabilities: caps}, nil
 }
 
 func (c *controller) CreateSnapshot(ctx context.Context, req *csi.CreateSnapshotRequest) (
