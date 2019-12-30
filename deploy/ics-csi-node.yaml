@@ -57,7 +57,7 @@ spec:
             - name: ICSPHERE_CSI_CONFIG
               value: "/etc/ics/icsphere-csi.conf" # here icsphere-csi.conf is the name of the file used for creating secret using "--from-file" flag
           args:
-            - "--v=4"
+            - "--v=5"
           securityContext:
             privileged: true
             capabilities:

@@ -30,7 +30,7 @@ spec:
           image: quay.io/k8scsi/csi-attacher:v1.1.1
           imagePullPolicy: IfNotPresent
           args:
-            - "--v=4"
+            - "--v=5"
             - "--timeout=300s"
             - "--csi-address=$(ADDRESS)"
           env:
@@ -47,7 +47,7 @@ spec:
               exec:
                 command: ["/bin/sh", "-c", "rm -rf /var/lib/csi/sockets/pluginproxy/csi.icsphere.inspur.com"]
           args:
-            - "--v=4"
+            - "--v=5"
           env:
             - name: CSI_ENDPOINT
               value: unix:///var/lib/csi/sockets/pluginproxy/csi.sock
@@ -88,7 +88,7 @@ spec:
           image: quay.io/k8scsi/csi-provisioner:v1.2.1
           imagePullPolicy: IfNotPresent
           args:
-            - "--v=4"
+            - "--v=5"
             - "--timeout=300s"
             - "--csi-address=$(ADDRESS)"
             - "--feature-gates=Topology=true"
