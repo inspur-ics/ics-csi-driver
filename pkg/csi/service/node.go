@@ -21,17 +21,17 @@ import (
 	_ "errors"
 	_ "fmt"
 	_ "io/ioutil"
-	_ "os"
+	"os"
 	_ "path"
 	_ "path/filepath"
 	_ "strings"
 
-	//"github.com/akutz/gofsutil"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"k8s.io/klog"
+	//"github.com/akutz/gofsutil"
 	//csictx "github.com/rexray/gocsi/context"
-	//"google.golang.org/grpc/codes"
-	//"google.golang.org/grpc/status"
-	//"k8s.io/klog"
 	//cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	//cnsconfig "ics-csi-driver/pkg/common/config"
 	//"ics-csi-driver/pkg/csi/service/common"
@@ -49,7 +49,8 @@ func (s *service) NodeStageVolume(
 	req *csi.NodeStageVolumeRequest) (
 	*csi.NodeStageVolumeResponse, error) {
 
-	return nil, nil
+	klog.V(4).Infof("NodeStageVolume: called with args %+v", *req)
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 func (s *service) NodeUnstageVolume(
@@ -57,7 +58,8 @@ func (s *service) NodeUnstageVolume(
 	req *csi.NodeUnstageVolumeRequest) (
 	*csi.NodeUnstageVolumeResponse, error) {
 
-	return nil, nil
+	klog.V(4).Infof("NodeUnstageVolume: called with args %+v", *req)
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 func (s *service) NodePublishVolume(
@@ -65,7 +67,8 @@ func (s *service) NodePublishVolume(
 	req *csi.NodePublishVolumeRequest) (
 	*csi.NodePublishVolumeResponse, error) {
 
-	return nil, nil
+	klog.V(4).Infof("NodePublishVolume: called with args %+v", *req)
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 func (s *service) NodeUnpublishVolume(
@@ -73,7 +76,8 @@ func (s *service) NodeUnpublishVolume(
 	req *csi.NodeUnpublishVolumeRequest) (
 	*csi.NodeUnpublishVolumeResponse, error) {
 
-	return nil, nil
+	klog.V(4).Infof("NodeUnpublishVolume: called with args %+v", *req)
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 func (s *service) NodeGetVolumeStats(
@@ -81,13 +85,16 @@ func (s *service) NodeGetVolumeStats(
 	req *csi.NodeGetVolumeStatsRequest) (
 	*csi.NodeGetVolumeStatsResponse, error) {
 
-	return nil, nil
+	klog.V(4).Infof("NodeGetVolumeStats: called with args %+v", *req)
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 func (s *service) NodeGetCapabilities(
 	ctx context.Context,
 	req *csi.NodeGetCapabilitiesRequest) (
 	*csi.NodeGetCapabilitiesResponse, error) {
+
+	klog.V(4).Infof("NodeGetCapabilities: called with args %+v", *req)
 
 	return &csi.NodeGetCapabilitiesResponse{
 		Capabilities: []*csi.NodeServiceCapability{
@@ -107,7 +114,18 @@ func (s *service) NodeGetInfo(
 	req *csi.NodeGetInfoRequest) (
 	*csi.NodeGetInfoResponse, error) {
 
-	return nil, nil
+	klog.V(4).Infof("NodeGetInfo: called with args %+v", *req)
+
+	nodeID := os.Getenv("NODE_NAME")
+	if nodeID == "" {
+		return nil, status.Error(codes.Internal, "ENV NODE_NAME is not set")
+	}
+
+	topology := &csi.Topology{}
+	return &csi.NodeGetInfoResponse{
+		NodeId:             nodeID,
+		AccessibleTopology: topology,
+	}, nil
 }
 
 func (s *service) NodeExpandVolume(
@@ -115,5 +133,6 @@ func (s *service) NodeExpandVolume(
 	req *csi.NodeExpandVolumeRequest) (
 	*csi.NodeExpandVolumeResponse, error) {
 
-	return nil, nil
+	klog.V(4).Infof("NodeExpandVolume: called with args %+v", *req)
+	return nil, status.Error(codes.Unimplemented, "")
 }
