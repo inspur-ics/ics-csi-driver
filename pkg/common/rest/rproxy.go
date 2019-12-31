@@ -21,15 +21,15 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"io"
 	"io/ioutil"
+	"k8s.io/klog"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
-
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const sessionTimeout = 30 * time.Second
@@ -69,7 +69,7 @@ func (rp *RestProxy) Login() (int, []byte, error) {
 	path := "authentication"
 	addr := fmt.Sprintf("%s://%s:%d/%s", rp.prot, rp.addr, rp.port, path)
 
-	fmt.Printf("Send %s request to %s\n", method, addr)
+	klog.V(4).Infof("Send %s request to %s\n", method, addr)
 
 	// send login request data as json
 	var reader io.Reader
@@ -92,39 +92,38 @@ func (rp *RestProxy) Login() (int, []byte, error) {
 	req, err := http.NewRequest(method, addr, reader)
 	req.SetBasicAuth(rp.user, rp.pass)
 	if err != nil {
-		fmt.Printf("Unable to create req: %s", err)
+		klog.Errorf("Unable to create req: %s", err)
 		return 0, nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("version", "5.0")
 	res, err = rp.httpRestProxy.Do(req)
 	if err != nil {
-		fmt.Printf("Request failed with error: %+v", err)
+		klog.Errorf("Request failed with error: %+v", err)
 		return 0, nil, err
 	}
 
 	defer res.Body.Close()
 
 	if err != nil {
-		fmt.Printf("Request error: %+v", err)
+		klog.Errorf("Request error: %+v", err)
 		return 0, nil, err
 	}
 
 	// validate response body
 	bodyBytes, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		fmt.Printf("Response failure: %+v", err)
+		klog.Errorf("Response failure: %+v", err)
 		err = status.Error(codes.Internal, "Unable to process response")
 		return res.StatusCode, nil, err
 	}
 
 	var loginRsp LoginRsp
 	if err := json.Unmarshal(bodyBytes, &loginRsp); err != nil {
-		fmt.Println("LoginRsp json unmarshal failed.")
+		klog.Error("LoginRsp json unmarshal failed.")
 	} else {
 		rp.sessionID = loginRsp.SessionId
-		fmt.Printf("Login SessionID:%s\n", rp.sessionID)
-		fmt.Println(loginRsp)
+		klog.V(4).Infof("Login SessionID:%s  RSP:%+v\n", rp.sessionID, loginRsp)
 	}
 
 	return res.StatusCode, bodyBytes, err
@@ -140,7 +139,7 @@ func (rp *RestProxy) Send(method, path string, data interface{}) (int, []byte, e
 
 	addr := fmt.Sprintf("%s://%s:%d/%s", rp.prot, rp.addr, rp.port, path)
 
-	fmt.Printf("Send %s request to %s\n", method, addr)
+	klog.V(4).Infof("Send %s request to %s\n", method, addr)
 
 	// send request data as json
 	var reader io.Reader
@@ -159,7 +158,7 @@ func (rp *RestProxy) Send(method, path string, data interface{}) (int, []byte, e
 	req, err := http.NewRequest(method, addr, reader)
 	req.SetBasicAuth(rp.user, rp.pass)
 	if err != nil {
-		fmt.Printf("Unable to create req: %s", err)
+		klog.Errorf("Unable to create req: %s", err)
 		return 0, nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -167,21 +166,21 @@ func (rp *RestProxy) Send(method, path string, data interface{}) (int, []byte, e
 	req.Header.Set("Authorization", rp.sessionID)
 	res, err = rp.httpRestProxy.Do(req)
 	if err != nil {
-		fmt.Printf("Request failed with error: %+v", err)
+		klog.Errorf("Request failed with error: %+v", err)
 		return 0, nil, err
 	}
 
 	defer res.Body.Close()
 
 	if err != nil {
-		fmt.Printf("Request error: %+v", err)
+		klog.Errorf("Request error: %+v", err)
 		return 0, nil, err
 	}
 
 	// validate response body
 	bodyBytes, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		fmt.Printf("Response failure: %+v", err)
+		klog.Errorf("Response failure: %+v", err)
 		err = status.Error(codes.Internal, "Unable to process response")
 		return res.StatusCode, nil, err
 	}
@@ -199,15 +198,21 @@ type RestProxyCfg struct {
 	//Tries       int
 }
 
+var icenterCfg = RestProxyCfg{
+	Addr: "10.7.11.90",
+	User: "admin",
+	Pass: "admin@inspur",
+}
+
 // TODO: implement sessions
-func NewRestProxy(cfg RestProxyCfg) (ri RestProxyInterface, err error) {
+func NewRestProxy() (ri RestProxyInterface, err error) {
 
 	var timeoutDuration time.Duration
 	idleTimeOut := "30s"
 	//timeoutDuration, err = time.ParseDuration(cfg.IdleTimeOut)
 	timeoutDuration, err = time.ParseDuration("30s")
 	if err != nil {
-		fmt.Printf("Uncorrect IdleTimeOut value: %s, Error %s", idleTimeOut, err)
+		klog.Errorf("Uncorrect IdleTimeOut value: %s, Error %s", idleTimeOut, err)
 		return nil, err
 	}
 
@@ -225,21 +230,21 @@ func NewRestProxy(cfg RestProxyCfg) (ri RestProxyInterface, err error) {
 	}
 
 	ri = &RestProxy{
-		addr:          cfg.Addr,
+		addr:          icenterCfg.Addr,
 		port:          443,
 		httpRestProxy: httpRestProxy,
 		requestID:     0,
 		prot:          "https",
-		user:          cfg.User,
-		pass:          cfg.Pass,
+		user:          icenterCfg.User,
+		pass:          icenterCfg.Pass,
 		tries:         3,
 	}
 
 	stat, _, err := ri.Login()
 	if err != nil {
-		fmt.Println("Internal failure in communication with ics")
+		klog.Error("Internal failure in communication with ics")
 	} else {
-		fmt.Printf("response stat:%v\n", stat)
+		klog.V(4).Infof("response stat:%v\n", stat)
 	}
 
 	return ri, err

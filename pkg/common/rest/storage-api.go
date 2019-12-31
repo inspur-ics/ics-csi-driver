@@ -20,55 +20,31 @@ package rest
 import (
 	"encoding/json"
 	"fmt"
+	"k8s.io/klog"
 )
 
-var rpc = RestProxyCfg{
-	Addr: "10.7.11.90",
-	User: "admin",
-	Pass: "admin@inspur",
-}
-
-type CreateVolumeDesc struct {
-	Name          string
-	Size          string
-	DataStoreType string
-	DataStoreId   string
-	VolumePolicy  string
-	Description   string
-	Bootable      bool
-	Shared        bool
-}
-
-func CreateVolume(req CreateVolumeDesc) RestError {
-	rp, err := NewRestProxy(rpc)
+func CreateVolume(restReq CreateVolumeReq) (string, RestError) {
+	rp, err := NewRestProxy()
+	taskId := ""
 	if err != nil {
 		msg := fmt.Sprintf("cannot create REST client: %s", err.Error())
-		return GetError(RestRequestMalfunction, msg)
-	}
-
-	restReq := CreateVolumeReq{
-		Name:          "test_qcow_zhanghj_1229_a1",
-		Size:          "30",
-		DataStoreType: "LOCAL",
-		DataStoreId:   "8a878bda6c219bca016c235703da0040",
-		VolumePolicy:  "THICK",
-		Description:   "k8s",
-		Bootable:      false,
-		Shared:        false,
+		return taskId, GetError(RestRequestMalfunction, msg)
 	}
 
 	stat, body, err := rp.Send("POST", "volumes", restReq)
 	fmt.Printf("create volume rsp:%v\n", stat)
 	if err != nil {
 		msg := fmt.Sprintf("create volume failed: %s", err.Error())
-		return GetError(RestRequestMalfunction, msg)
+		return taskId, GetError(RestRequestMalfunction, msg)
 	}
 
 	var createVolumeRsp CreateVolumeRsp
 	if err := json.Unmarshal(body, &createVolumeRsp); err != nil {
 		msg := fmt.Sprintf("json unmarshal failed: %s", err.Error())
-		return GetError(RestRequestMalfunction, msg)
+		return taskId, GetError(RestRequestMalfunction, msg)
 	}
-	fmt.Printf("create volume taskId: %s\n", createVolumeRsp.TaskId)
-	return nil
+
+	taskId = createVolumeRsp.TaskId
+	klog.V(4).Infof("create volume taskId: %s\n", taskId)
+	return taskId, nil
 }

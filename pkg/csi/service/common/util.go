@@ -18,17 +18,36 @@ package common
 
 import (
 	"context"
-	"strings"
-
+	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"ics-csi-driver/pkg/common/rest"
 	"k8s.io/klog"
+	"strconv"
+	"strings"
 )
 
 // CreateVolumeUtil is the helper function to create CNS volume
 func CreateVolumeUtil(ctx context.Context, spec *CreateVolumeSpec) (string, error) {
 	klog.V(4).Infof("CreateVolumeUtil: called with args %+v", *spec)
 
-	return "VolumeId-Unimplemented-0000", nil
+	createVolumeReq := rest.CreateVolumeReq{
+		Name:          spec.Name,
+		Size:          strconv.FormatInt(spec.CapacityGB, 10),
+		DataStoreId:   spec.DatastoreID,
+		DataStoreType: "LOCAL",
+		VolumePolicy:  "THICK",
+		Description:   "k8s",
+		Bootable:      false,
+		Shared:        false,
+	}
+
+	taskId, err := rest.CreateVolume(createVolumeReq)
+	if err != nil {
+		klog.V(4).Infof("create voluem failed  with args %+v", createVolumeReq)
+	}
+
+	volumeId := fmt.Sprintf("VolumeId-Unimplemented-task%s", taskId)
+	return volumeId, nil
 }
 
 // GetVCenter returns VirtualCenter object from specified Manager object.

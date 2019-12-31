@@ -6,5 +6,5 @@ metadata:
     storageclass.kubernetes.io/is-default-class: "true"
 provisioner: csi.icsphere.inspur.com
 parameters:
-  datastoreurl: "ds:///vmfs/volumes/vsan:52cdfa80721ff516-ea1e993113acfc77/"
+  datastoreurl: "8a878bda6c219bca016c235703da0040"
   fstype: "ext4" 
