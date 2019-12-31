@@ -45,9 +45,7 @@ type Manager struct {
 
 // CreateVolumeSpec is the Volume Spec used by CSI driver
 type CreateVolumeSpec struct {
-	Name              string
-	StoragePolicyName string
-	StoragePolicyID   string
-	DatastoreURL      string
-	CapacityMB        int64
+	Name        string
+	DatastoreID string
+	CapacityGB  int64
 }

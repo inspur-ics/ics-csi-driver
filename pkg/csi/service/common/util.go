@@ -17,13 +17,19 @@ limitations under the License.
 package common
 
 import (
-	//"context"
+	"context"
 	"strings"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	//"k8s.io/klog"
-	//cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
+	"k8s.io/klog"
 )
+
+// CreateVolumeUtil is the helper function to create CNS volume
+func CreateVolumeUtil(ctx context.Context, spec *CreateVolumeSpec) (string, error) {
+	klog.V(4).Infof("CreateVolumeUtil: called with args %+v", *spec)
+
+	return "VolumeId-Unimplemented-0000", nil
+}
 
 // GetVCenter returns VirtualCenter object from specified Manager object.
 // Before returning VirtualCenter object, vcenter connection is established if session doesn't exist.

@@ -18,9 +18,9 @@ package cns
 
 import (
 	"context"
-	_ "fmt"
+	"fmt"
 	_ "math/rand"
-	_ "strings"
+	"strings"
 	_ "time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
@@ -70,7 +70,51 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	*csi.CreateVolumeResponse, error) {
 
 	klog.V(4).Infof("CreateVolume: called with args %+v", *req)
-	return nil, status.Error(codes.Unimplemented, "")
+
+	// Volume Size - Default is 10 GiB
+	volSizeBytes := int64(common.DefaultGbDiskSize * common.GbInBytes)
+	if req.GetCapacityRange() != nil && req.GetCapacityRange().RequiredBytes != 0 {
+		volSizeBytes = int64(req.GetCapacityRange().GetRequiredBytes())
+	}
+	volSizeGB := int64(common.RoundUpSize(volSizeBytes, common.GbInBytes))
+
+	var datastoreID string
+	var fsType string
+
+	// Support case insensitive parameters
+	for paramName := range req.Parameters {
+		param := strings.ToLower(paramName)
+		if param == common.AttributeDatastoreURL {
+			datastoreID = req.Parameters[paramName]
+		} else if param == common.AttributeFsType {
+			fsType = req.Parameters[common.AttributeFsType]
+		}
+	}
+
+	var createVolumeSpec = common.CreateVolumeSpec{
+		CapacityGB:  volSizeGB,
+		Name:        req.Name,
+		DatastoreID: datastoreID,
+	}
+
+	volumeID, err := common.CreateVolumeUtil(ctx, &createVolumeSpec)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to create volume. Error: %+v", err)
+		klog.Error(msg)
+		return nil, status.Errorf(codes.Internal, msg)
+	}
+	attributes := make(map[string]string)
+	attributes[common.AttributeDiskType] = common.DiskTypeString
+	attributes[common.AttributeFsType] = fsType
+	resp := &csi.CreateVolumeResponse{
+		Volume: &csi.Volume{
+			VolumeId:      volumeID,
+			CapacityBytes: int64(volSizeGB * common.GbInBytes),
+			VolumeContext: attributes,
+		},
+	}
+
+	return resp, nil
 }
 
 // CreateVolume is deleting CNS Volume specified in DeleteVolumeRequest
@@ -78,7 +122,7 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 	*csi.DeleteVolumeResponse, error) {
 
 	klog.V(4).Infof("DeleteVolume: called with args %+v", *req)
-        return nil, status.Error(codes.Unimplemented, "")
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 // ControllerPublishVolume attaches a volume to the Node VM.
@@ -87,7 +131,7 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 	*csi.ControllerPublishVolumeResponse, error) {
 
 	klog.V(4).Infof("ControllerPublishVolume: called with args %+v", *req)
-        return nil, status.Error(codes.Unimplemented, "")
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 // ControllerUnpublishVolume detaches a volume from the Node VM.
@@ -96,7 +140,7 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 	*csi.ControllerUnpublishVolumeResponse, error) {
 
 	klog.V(4).Infof("ControllerUnpublishVolume: called with args %+v", *req)
-        return nil, status.Error(codes.Unimplemented, "")
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 // ValidateVolumeCapabilities returns the capabilities of the volume.
@@ -104,7 +148,7 @@ func (c *controller) ValidateVolumeCapabilities(ctx context.Context, req *csi.Va
 	*csi.ValidateVolumeCapabilitiesResponse, error) {
 
 	klog.V(4).Infof("ValidateVolumeCapabilities: called with args %+v", *req)
-        return nil, status.Error(codes.Unimplemented, "")
+	return nil, status.Error(codes.Unimplemented, "")
 }
 
 func (c *controller) ListVolumes(ctx context.Context, req *csi.ListVolumesRequest) (

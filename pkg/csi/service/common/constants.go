@@ -27,7 +27,7 @@ const (
 	DefaultGbDiskSize = int64(10)
 
 	// DiskTypeString is the value for the PersistentVolume's attribute "type"
-	DiskTypeString = "vSphere CNS Block Volume"
+	DiskTypeString = "InCloudSphere CNS Block Volume"
 
 	// AttributeDiskType is a PersistentVolume's attribute.
 	AttributeDiskType = "type"
