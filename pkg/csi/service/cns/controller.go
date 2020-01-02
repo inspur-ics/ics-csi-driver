@@ -131,7 +131,14 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 	*csi.ControllerPublishVolumeResponse, error) {
 
 	klog.V(4).Infof("ControllerPublishVolume: called with args %+v", *req)
-	return nil, status.Error(codes.Unimplemented, "")
+
+	publishInfo := make(map[string]string)
+	publishInfo[common.AttributeDiskType] = common.DiskTypeString
+	publishInfo[common.AttributeFirstClassDiskUUID] = req.VolumeId
+	resp := &csi.ControllerPublishVolumeResponse{
+		PublishContext: publishInfo,
+	}
+	return resp, nil
 }
 
 // ControllerUnpublishVolume detaches a volume from the Node VM.

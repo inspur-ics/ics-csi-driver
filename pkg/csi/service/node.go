@@ -50,7 +50,11 @@ func (s *service) NodeStageVolume(
 	*csi.NodeStageVolumeResponse, error) {
 
 	klog.V(4).Infof("NodeStageVolume: called with args %+v", *req)
-	return nil, status.Error(codes.Unimplemented, "")
+	volID := req.GetVolumeId()
+	pubCtx := req.GetPublishContext()
+	klog.V(2).Infof("Checking if volume %s is attached(ctx:%+v)", volID, pubCtx)
+
+	return &csi.NodeStageVolumeResponse{}, nil
 }
 
 func (s *service) NodeUnstageVolume(
@@ -59,7 +63,7 @@ func (s *service) NodeUnstageVolume(
 	*csi.NodeUnstageVolumeResponse, error) {
 
 	klog.V(4).Infof("NodeUnstageVolume: called with args %+v", *req)
-	return nil, status.Error(codes.Unimplemented, "")
+	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
 func (s *service) NodePublishVolume(
@@ -68,7 +72,7 @@ func (s *service) NodePublishVolume(
 	*csi.NodePublishVolumeResponse, error) {
 
 	klog.V(4).Infof("NodePublishVolume: called with args %+v", *req)
-	return nil, status.Error(codes.Unimplemented, "")
+	return &csi.NodePublishVolumeResponse{}, nil
 }
 
 func (s *service) NodeUnpublishVolume(
@@ -77,7 +81,7 @@ func (s *service) NodeUnpublishVolume(
 	*csi.NodeUnpublishVolumeResponse, error) {
 
 	klog.V(4).Infof("NodeUnpublishVolume: called with args %+v", *req)
-	return nil, status.Error(codes.Unimplemented, "")
+	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
 func (s *service) NodeGetVolumeStats(
