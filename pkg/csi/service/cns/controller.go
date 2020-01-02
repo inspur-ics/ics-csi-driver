@@ -122,7 +122,7 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 	*csi.DeleteVolumeResponse, error) {
 
 	klog.V(4).Infof("DeleteVolume: called with args %+v", *req)
-	return nil, status.Error(codes.Unimplemented, "")
+	return &csi.DeleteVolumeResponse{}, nil
 }
 
 // ControllerPublishVolume attaches a volume to the Node VM.
@@ -147,7 +147,8 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 	*csi.ControllerUnpublishVolumeResponse, error) {
 
 	klog.V(4).Infof("ControllerUnpublishVolume: called with args %+v", *req)
-	return nil, status.Error(codes.Unimplemented, "")
+	resp := &csi.ControllerUnpublishVolumeResponse{}
+	return resp, nil
 }
 
 // ValidateVolumeCapabilities returns the capabilities of the volume.
