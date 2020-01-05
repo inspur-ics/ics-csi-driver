@@ -6,5 +6,5 @@ metadata:
     storageclass.kubernetes.io/is-default-class: "true"
 provisioner: csi.icsphere.inspur.com
 parameters:
-  datastoreurl: "8a878bda6c219bca016c235703da0040"
+  datastoreurl: "8a878bda6f6f3ca4016f6f458b50003c"
   fstype: "ext4" 
