@@ -96,7 +96,7 @@ func (rp *RestProxy) Login() (int, []byte, error) {
 		return 0, nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("version", "5.0")
+	req.Header.Set("version", "5.6")
 	res, err = rp.httpRestProxy.Do(req)
 	if err != nil {
 		klog.Errorf("Request failed with error: %+v", err)
@@ -162,7 +162,7 @@ func (rp *RestProxy) Send(method, path string, data interface{}) (int, []byte, e
 		return 0, nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("version", "5.0")
+	req.Header.Set("version", "5.6")
 	req.Header.Set("Authorization", rp.sessionID)
 	res, err = rp.httpRestProxy.Do(req)
 	if err != nil {
@@ -184,7 +184,6 @@ func (rp *RestProxy) Send(method, path string, data interface{}) (int, []byte, e
 		err = status.Error(codes.Internal, "Unable to process response")
 		return res.StatusCode, nil, err
 	}
-
 	return res.StatusCode, bodyBytes, err
 }
 
