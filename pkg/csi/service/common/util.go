@@ -18,10 +18,10 @@ package common
 
 import (
 	"context"
-    "fmt"
-    "google.golang.org/grpc/codes"
-    "google.golang.org/grpc/status"
+	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"ics-csi-driver/pkg/common/rest"
 	"k8s.io/klog"
 	"strconv"
@@ -46,88 +46,88 @@ func CreateVolumeUtil(ctx context.Context, spec *CreateVolumeSpec) (string, erro
 	volumeId, err := rest.CreateVolume(createVolumeReq)
 	if err != nil {
 		klog.V(4).Infof("create volume failed  with args %+v", createVolumeReq)
-        return volumeId, err
+		return volumeId, err
 	} else {
-        klog.V(5).Infof("create volume %s succeed: volumeId %s", spec.Name, volumeId)
-        return volumeId, nil
-    }
+		klog.V(5).Infof("create volume %s succeed: volumeId %s", spec.Name, volumeId)
+		return volumeId, nil
+	}
 }
 
 func AttachVolumeUtil(ctx context.Context, nodeId string, volumeId string) (string, error) {
-    scsiId, vmId  := "", ""
-    rp, err := rest.NewRestProxy()
-    if err != nil {
-        klog.Error("create restProxy failed.")
-        return scsiId, err
-    }
+	scsiId, vmId := "", ""
+	rp, err := rest.NewRestProxy()
+	if err != nil {
+		klog.Error("create restProxy failed.")
+		return scsiId, err
+	}
 
-    vmList, err := rest.GetVmList(rp, nodeId)
-    if err != nil {
-        klog.Error("get vm list failed.")
-        return scsiId, err
-    }
+	vmList, err := rest.GetVmList(rp, nodeId)
+	if err != nil {
+		klog.Error("get vm list failed.")
+		return scsiId, err
+	}
 
-    if len(vmList) > 0 {
-        for _, vmInfo := range vmList {
-            if vmInfo.Name == nodeId || vmInfo.Description == nodeId {
-                vmId = vmInfo.Id
-                klog.V(5).Infof("find vm %s id %s", nodeId, vmId)
-                break
-            }
-        }
-    }
+	if len(vmList) > 0 {
+		for _, vmInfo := range vmList {
+			if vmInfo.Name == nodeId || vmInfo.Description == nodeId {
+				vmId = vmInfo.Id
+				klog.V(5).Infof("find vm %s id %s", nodeId, vmId)
+				break
+			}
+		}
+	}
 
-    if vmId == "" {
-        klog.Errorf("vm %s not found", nodeId)
-        return scsiId, status.Errorf(codes.Internal,
-                "vm %s not found", nodeId)
-    }
+	if vmId == "" {
+		klog.Errorf("vm %s not found", nodeId)
+		return scsiId, status.Errorf(codes.Internal,
+			"vm %s not found", nodeId)
+	}
 
-    vmInfo, err := rest.GetVmInfo(rp, vmId)
-    if err != nil {
-        klog.Error("get vm info failed.")
-        return scsiId, err
-    }
+	vmInfo, err := rest.GetVmInfo(rp, vmId)
+	if err != nil {
+		klog.Error("get vm info failed.")
+		return scsiId, err
+	}
 
-    volumeInfo, err := rest.GetVolumeInfo(rp, volumeId)
-    if err != nil {
-        klog.Error("get volume info failed.")
-        return scsiId, err
-    }
+	volumeInfo, err := rest.GetVolumeInfo(rp, volumeId)
+	if err != nil {
+		klog.Error("get volume info failed.")
+		return scsiId, err
+	}
 
-    volId := volumeInfo.Id
-    diskInfo := rest.VmDiskInfo {
-        Id:         volumeInfo.Id,
-        Label:      "",
-        ScsiId:     fmt.Sprintf("6%.15s", volId[len(volId)-15:]),
-        Enabled:    false,
-        Volume:     volumeInfo,
-        BusModel:   "SCSI",
-        ReadWriteModel: "NONE",
-        EnableNativeIO: false,
-    }
-    vmInfo.Disks = append(vmInfo.Disks, diskInfo)
-    for _, disk := range vmInfo.Disks {
-        if disk.BusModel == "SCSI" {
-            disk.Volume.DiskType = "SAS"
-        }
-    }
-    vmInfo.VncPasswd = "00000000"
-    taskId, err := rest.SetVmInfo(rp, vmInfo)
-    if err != nil {
-        klog.Errorf("attach volume %s to vm %s failed.", volumeId, nodeId)
-        return scsiId, err
-    }
+	volId := volumeInfo.Id
+	diskInfo := rest.VmDiskInfo{
+		Id:             volumeInfo.Id,
+		Label:          "",
+		ScsiId:         fmt.Sprintf("6%.15s", volId[len(volId)-15:]),
+		Enabled:        false,
+		Volume:         volumeInfo,
+		BusModel:       "SCSI",
+		ReadWriteModel: "NONE",
+		EnableNativeIO: false,
+	}
+	vmInfo.Disks = append(vmInfo.Disks, diskInfo)
+	for _, disk := range vmInfo.Disks {
+		if disk.BusModel == "SCSI" {
+			disk.Volume.DiskType = "SAS"
+		}
+	}
+	vmInfo.VncPasswd = "00000000"
+	taskId, err := rest.SetVmInfo(rp, vmInfo)
+	if err != nil {
+		klog.Errorf("attach volume %s to vm %s failed.", volumeId, nodeId)
+		return scsiId, err
+	}
 
-    taskStat, err := rest.GetTaskState(rp, taskId)
-    if err != nil {
-        return scsiId, err
-    } else if taskStat != "FINISHED" {
-        return scsiId, status.Errorf(codes.Internal,
-                "set vm info failed: taskId %s stat %s", taskId, taskStat)
-    }
+	taskStat, err := rest.GetTaskState(rp, taskId)
+	if err != nil {
+		return scsiId, err
+	} else if taskStat != "FINISHED" {
+		return scsiId, status.Errorf(codes.Internal,
+			"set vm info failed: taskId %s stat %s", taskId, taskStat)
+	}
 
-    return diskInfo.ScsiId, nil
+	return diskInfo.ScsiId, nil
 }
 
 // GetVCenter returns VirtualCenter object from specified Manager object.

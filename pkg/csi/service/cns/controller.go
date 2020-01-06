@@ -132,10 +132,10 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 
 	klog.V(4).Infof("ControllerPublishVolume: called with args %+v", *req)
 
-    scsiId, err := common.AttachVolumeUtil(ctx, req.NodeId, req.VolumeId)
-    if err != nil {
-        klog.Errorf("ControllerPublishVolume: failed with err %v", err) 
-    }
+	scsiId, err := common.AttachVolumeUtil(ctx, req.NodeId, req.VolumeId)
+	if err != nil {
+		klog.Errorf("ControllerPublishVolume: failed with err %v", err)
+	}
 
 	publishInfo := make(map[string]string)
 	publishInfo[common.AttributeDiskType] = common.DiskTypeString
