@@ -122,6 +122,19 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 	*csi.DeleteVolumeResponse, error) {
 
 	klog.V(4).Infof("DeleteVolume: called with args %+v", *req)
+
+	var err error
+	err = common.ValidateDeleteVolumeRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	err = common.DeleteVolumeUtil(ctx, req.VolumeId, true)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to delete volume: %q. Error: %+v", req.VolumeId, err)
+		klog.Error(msg)
+		return nil, status.Errorf(codes.Internal, msg)
+	}
+
 	return &csi.DeleteVolumeResponse{}, nil
 }
 

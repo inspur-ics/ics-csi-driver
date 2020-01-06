@@ -69,6 +69,35 @@ func CreateVolume(restReq CreateVolumeReq) (string, RestError) {
 	return volumeId, GetError(RestStorageFailureUnknown, msg)
 }
 
+func DeleteVolume(rp RestProxyInterface, volumeId string, deleteVolume bool) (string, RestError) {
+	taskId, msg := "", ""
+	addr := fmt.Sprintf("volumes/%s/?removeData=%v", volumeId, deleteVolume)
+	stat, body, err := rp.Send("DELETE", addr, nil)
+	if err != nil {
+		msg = fmt.Sprintf("delete volume failed: stat %s err %s", stat, err.Error())
+		klog.Errorf("%s", msg)
+		return taskId, GetError(RestRequestMalfunction, msg)
+	}
+
+	if stat != 200 {
+		var resp interface{}
+		if err := json.Unmarshal(body, &resp); err != nil {
+			msg = fmt.Sprintf("json unmarshal failed: %s", err.Error())
+		}
+		msg = fmt.Sprintf("delete volume %s failed: %+v", volumeId, resp)
+		klog.Errorf("%s", msg)
+		return taskId, GetError(RestRequestMalfunction, msg)
+	}
+
+	var taskRsp TaskRsp
+	if err := json.Unmarshal(body, &taskRsp); err != nil {
+		msg = fmt.Sprintf("task info unmarshal failed: %s", err.Error())
+		klog.Errorf("%s", msg)
+		return taskId, GetError(RestRequestMalfunction, msg)
+	}
+	return taskRsp.TaskId, nil
+}
+
 func GetVolumeInfo(rp RestProxyInterface, volumeId string) (VolumeInfoRsp, RestError) {
 	var msg string
 	var restReq interface{}
@@ -184,7 +213,7 @@ func SetVmInfo(rp RestProxyInterface, vmInfoReq VmInfoRsp) (string, RestError) {
 func GetTaskState(rp RestProxyInterface, taskId string) (string, RestError) {
 	var msg string
 	taskState := "unknown"
-	maxMillisecond := 300 * time.Second
+	maxMillisecond := 60 * time.Second
 	sleepMillisecond := 100 * time.Millisecond
 
 	for {

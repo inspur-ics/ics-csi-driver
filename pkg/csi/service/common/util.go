@@ -30,8 +30,7 @@ import (
 
 // CreateVolumeUtil is the helper function to create CNS volume
 func CreateVolumeUtil(ctx context.Context, spec *CreateVolumeSpec) (string, error) {
-	klog.V(4).Infof("CreateVolumeUtil: called with args %+v", *spec)
-
+	klog.V(4).Infof("creating volume %s with create spec %+v", spec.Name, *spec)
 	createVolumeReq := rest.CreateVolumeReq{
 		Name:          spec.Name,
 		Size:          strconv.FormatInt(spec.CapacityGB, 10),
@@ -48,7 +47,7 @@ func CreateVolumeUtil(ctx context.Context, spec *CreateVolumeSpec) (string, erro
 		klog.V(4).Infof("create volume failed  with args %+v", createVolumeReq)
 		return volumeId, err
 	} else {
-		klog.V(5).Infof("create volume %s succeed: volumeId %s", spec.Name, volumeId)
+		klog.V(4).Infof("successfully created volume %s. volumeId: %s", spec.Name, volumeId)
 		return volumeId, nil
 	}
 }
@@ -113,6 +112,7 @@ func AttachVolumeUtil(ctx context.Context, nodeId string, volumeId string) (stri
 		}
 	}
 	vmInfo.VncPasswd = "00000000"
+	klog.V(4).Infof("attaching volume %s to vm %s", volumeId, nodeId)
 	taskId, err := rest.SetVmInfo(rp, vmInfo)
 	if err != nil {
 		klog.Errorf("attach volume %s to vm %s failed.", volumeId, nodeId)
@@ -127,7 +127,36 @@ func AttachVolumeUtil(ctx context.Context, nodeId string, volumeId string) (stri
 			"set vm info failed: taskId %s stat %s", taskId, taskStat)
 	}
 
+	klog.V(4).Infof("successfully attached disk %s to vm %s. scsi wwn: %s",
+		volumeId, nodeId, diskInfo.ScsiId)
 	return diskInfo.ScsiId, nil
+}
+
+func DeleteVolumeUtil(ctx context.Context, volumeId string, deleteVolume bool) error {
+	rp, err := rest.NewRestProxy()
+	if err != nil {
+		klog.Error("create restProxy failed.")
+		return err
+	}
+
+	klog.V(4).Infof("deleting volume: %s", volumeId)
+	taskId, err := rest.DeleteVolume(rp, volumeId, deleteVolume)
+	if err != nil {
+		klog.Errorf("delete volume %s failed.", volumeId)
+		return err
+	}
+
+	taskStat, err := rest.GetTaskState(rp, taskId)
+	if err != nil {
+		klog.Errorf("get task state failed.")
+		return err
+	} else if taskStat != "FINISHED" {
+		return status.Errorf(codes.Internal,
+			"delete volume %s failed: taskId %s stat %s", volumeId, taskId, taskStat)
+	}
+
+	klog.V(4).Infof("successfully deleted volume: %s", volumeId)
+	return nil
 }
 
 // GetVCenter returns VirtualCenter object from specified Manager object.
