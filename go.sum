@@ -1,5 +1,7 @@
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
+github.com/akutz/gofsutil v0.1.2 h1:aCdWrZdxajx8kllNQSKaMDpRJWSE2wcyKNy7eDMXkrI=
+github.com/akutz/gofsutil v0.1.2/go.mod h1:09JEF8dR0bTTZMQ1m3/+O1rqQyH2lG1ET34POnpzyxw=
 github.com/akutz/gosync v0.1.0 h1:naxPT/aDYDh79PMwM3XmencmNQeYmpNFSZy4ZE9zIW0=
 github.com/akutz/gosync v0.1.0/go.mod h1:I8I4aiqJI1nqaeYOOB1WS+CgRJVVPqhct9Y4njywM84=
 github.com/akutz/memconn v0.1.0/go.mod h1:Jo8rI7m0NieZyLI5e2CDlRdRqRRB4S7Xp77ukDjH+Fw=

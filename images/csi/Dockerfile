@@ -1,5 +1,5 @@
 # This build arg allows the specification of a custom base image.
-ARG BASE_IMAGE=centos:7
+ARG BASE_IMAGE=ubuntu:18.04
 FROM ${BASE_IMAGE}
 LABEL "maintainer" "ics-dev-team"
 
