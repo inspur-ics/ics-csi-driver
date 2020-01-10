@@ -65,7 +65,7 @@ spec:
             allowPrivilegeEscalation: true
           volumeMounts:
             - name: ics-config-volume
-              mountPath: /etc/cloud
+              mountPath: /etc/ics
               readOnly: true
             - name: plugin-dir
               mountPath: /csi
