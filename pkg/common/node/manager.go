@@ -46,14 +46,14 @@ type Manager interface {
 	DiscoverNode(nodeUUID string) error
 	// GetNode refreshes and returns the VirtualMachine for a registered node
 	// given its UUID.
-	GetNode(nodeUUID string) (*vsphere.VirtualMachine, error)
+	GetNode(nodeUUID string) (*ics.VirtualMachine, error)
 	// GetNodeByName refreshes and returns the VirtualMachine for a registered node
 	// given its name.
-	GetNodeByName(nodeName string) (*vsphere.VirtualMachine, error)
+	GetNodeByName(nodeName string) (*ics.VirtualMachine, error)
 	// GetAllNodes refreshes and returns VirtualMachine for all registered
 	// nodes. If nodes are added or removed concurrently, they may or may not be
 	// reflected in the result of a call to this method.
-	GetAllNodes() ([]*vsphere.VirtualMachine, error)
+	GetAllNodes() ([]*ics.VirtualMachine, error)
 	// UnregisterNode unregisters a registered node given its name.
 	UnregisterNode(nodeName string) error
 }
@@ -111,7 +111,7 @@ func (m *nodeManager) RegisterNode(nodeUUID string, nodeName string) error {
 // DiscoverNode discovers a registered node given its UUID from vCenter.
 // If node is not found in the vCenter for the given UUID, for ErrVMNotFound is returned to the caller
 func (m *nodeManager) DiscoverNode(nodeUUID string) error {
-	vm, err := vsphere.GetVirtualMachineByUUID(nodeUUID, false)
+	vm, err := ics.GetVirtualMachineByUUID(nodeUUID, false)
 	if err != nil {
 		klog.Errorf("Couldn't find VM instance with nodeUUID %s, failed to discover with err: %v", nodeUUID, err)
 		return err
@@ -123,7 +123,7 @@ func (m *nodeManager) DiscoverNode(nodeUUID string) error {
 
 // GetNodeByName refreshes and returns the VirtualMachine for a registered node
 // given its name.
-func (m *nodeManager) GetNodeByName(nodeName string) (*vsphere.VirtualMachine, error) {
+func (m *nodeManager) GetNodeByName(nodeName string) (*ics.VirtualMachine, error) {
 	nodeUUID, found := m.nodeNameToUUID.Load(nodeName)
 	if !found {
 		klog.Errorf("Node not found with nodeName %s", nodeName)
@@ -145,7 +145,7 @@ func (m *nodeManager) GetNodeByName(nodeName string) (*vsphere.VirtualMachine, e
 
 // GetNode refreshes and returns the VirtualMachine for a registered node
 // given its UUID
-func (m *nodeManager) GetNode(nodeUUID string) (*vsphere.VirtualMachine, error) {
+func (m *nodeManager) GetNode(nodeUUID string) (*ics.VirtualMachine, error) {
 	vmInf, discovered := m.nodeVMs.Load(nodeUUID)
 	if !discovered {
 		klog.V(2).Infof("Node hasn't been discovered yet with nodeUUID %s", nodeUUID)
@@ -158,10 +158,10 @@ func (m *nodeManager) GetNode(nodeUUID string) (*vsphere.VirtualMachine, error) 
 		vmInf, _ = m.nodeVMs.Load(nodeUUID)
 		klog.V(2).Infof("Node was successfully discovered with nodeUUID %s in vm %v", nodeUUID, vmInf)
 
-		return vmInf.(*vsphere.VirtualMachine), nil
+		return vmInf.(*ics.VirtualMachine), nil
 	}
 
-	vm := vmInf.(*vsphere.VirtualMachine)
+	vm := vmInf.(*ics.VirtualMachine)
 	klog.V(1).Infof("Renewing virtual machine %v with nodeUUID %s", vm, nodeUUID)
 
 	if err := vm.Renew(true); err != nil {
@@ -174,8 +174,8 @@ func (m *nodeManager) GetNode(nodeUUID string) (*vsphere.VirtualMachine, error) 
 }
 
 // GetAllNodes refreshes and returns VirtualMachine for all registered nodes.
-func (m *nodeManager) GetAllNodes() ([]*vsphere.VirtualMachine, error) {
-	var vms []*vsphere.VirtualMachine
+func (m *nodeManager) GetAllNodes() ([]*ics.VirtualMachine, error) {
+	var vms []*ics.VirtualMachine
 	var err error
 	reconnectedHosts := make(map[string]bool)
 
@@ -210,7 +210,7 @@ func (m *nodeManager) GetAllNodes() ([]*vsphere.VirtualMachine, error) {
 		}
 
 		nodeUUID := nodeUUIDInf.(string)
-		vm := vmInf.(*vsphere.VirtualMachine)
+		vm := vmInf.(*ics.VirtualMachine)
 
 		if reconnectedHosts[vm.VirtualCenterHost] {
 			klog.V(3).Infof("Renewing VM %v, no new connection needed: nodeUUID %s", vm, nodeUUID)

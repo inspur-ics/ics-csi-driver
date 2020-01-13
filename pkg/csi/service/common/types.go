@@ -19,9 +19,8 @@ package common
 import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 
-	//cnsvolume "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
-	//cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"ics-csi-driver/pkg/common/config"
+	ics "ics-csi-driver/pkg/common/icsphere"
 )
 
 var (
@@ -37,10 +36,9 @@ var (
 
 // Manager type comprises VirtualCenterConfig, CnsConfig, VolumeManager and VirtualCenterManager
 type Manager struct {
-	//VcenterConfig  *cnsvsphere.VirtualCenterConfig
-	CnsConfig *config.Config
-	//VolumeManager  cnsvolume.Manager
-	//VcenterManager cnsvsphere.VirtualCenterManager
+	VcenterConfig  *ics.VirtualCenterConfig
+	CnsConfig      *config.Config
+	VcenterManager ics.VirtualCenterManager
 }
 
 // CreateVolumeSpec is the Volume Spec used by CSI driver

@@ -19,18 +19,15 @@ package cns
 import (
 	"context"
 	"fmt"
-	_ "math/rand"
 	"strings"
-	_ "time"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog"
 
-	//cnsvolume "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/volume"
-	//cnsvsphere "sigs.k8s.io/vsphere-csi-driver/pkg/common/cns-lib/vsphere"
 	"ics-csi-driver/pkg/common/config"
+	ics "ics-csi-driver/pkg/common/icsphere"
 	"ics-csi-driver/pkg/csi/service/common"
 	csitypes "ics-csi-driver/pkg/csi/types"
 )
@@ -45,8 +42,9 @@ var (
 
 type nodeManager interface {
 	Initialize() error
-	//GetSharedDatastoresInK8SCluster(ctx context.Context) ([]*cnsvsphere.DatastoreInfo, error)
-	//GetNodeByName(nodeName string) (*cnsvsphere.VirtualMachine, error)
+	GetSharedDatastoresInK8SCluster(ctx context.Context) ([]*ics.DatastoreInfo, error)
+	GetSharedDatastoresInTopology(ctx context.Context, topologyRequirement *csi.TopologyRequirement, zoneKey string, regionKey string) ([]*ics.DatastoreInfo, map[string][]map[string]string, error)
+	GetNodeByName(nodeName string) (*ics.VirtualMachine, error)
 }
 
 type controller struct {
@@ -61,6 +59,43 @@ func New() csitypes.Controller {
 
 // Init is initializing controller struct
 func (c *controller) Init(config *config.Config) error {
+	klog.Infof("Initializing ics csi-controller")
+
+	var err error
+	vcenterconfig, err := ics.GetVirtualCenterConfig(config)
+	if err != nil {
+		klog.Errorf("Failed to get VirtualCenterConfig. err=%v", err)
+		return err
+	}
+	vcManager := ics.GetVirtualCenterManager()
+	vcenter, err := vcManager.RegisterVirtualCenter(vcenterconfig)
+	if err != nil {
+		klog.Errorf("Failed to register VC with virtualCenterManager. err=%v", err)
+		return err
+	}
+	klog.Infof("Successfully register VC %+v", vcenter)
+
+	c.manager = &common.Manager{
+		VcenterConfig:  vcenterconfig,
+		CnsConfig:      config,
+		VcenterManager: ics.GetVirtualCenterManager(),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	vc, err := common.GetVCenter(ctx, c.manager)
+	if err != nil {
+		klog.Errorf("Failed to get vcenter. err=%v", err)
+		return err
+	}
+	klog.Infof("Successfully get vcenter %+v", vc)
+
+	c.nodeMgr = &Nodes{}
+	err = c.nodeMgr.Initialize()
+	if err != nil {
+		klog.Errorf("Failed to initialize nodeMgr. err=%v", err)
+		return err
+	}
 	return nil
 }
 

@@ -22,6 +22,7 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	ics "ics-csi-driver/pkg/common/icsphere"
 	"ics-csi-driver/pkg/common/rest"
 	"k8s.io/klog"
 	"strconv"
@@ -161,22 +162,24 @@ func DeleteVolumeUtil(ctx context.Context, volumeId string, deleteVolume bool) e
 
 // GetVCenter returns VirtualCenter object from specified Manager object.
 // Before returning VirtualCenter object, vcenter connection is established if session doesn't exist.
-/*
-func GetVCenter(ctx context.Context, manager *Manager) (*cnsvsphere.VirtualCenter, error) {
+
+func GetVCenter(ctx context.Context, manager *Manager) (*ics.VirtualCenter, error) {
 	var err error
 	vcenter, err := manager.VcenterManager.GetVirtualCenter(manager.VcenterConfig.Host)
 	if err != nil {
 		klog.Errorf("Failed to get VirtualCenter instance for host: %q. err=%v", manager.VcenterConfig.Host, err)
 		return nil, err
 	}
-	err = vcenter.Connect(ctx)
-	if err != nil {
-		klog.Errorf("Failed to connect to VirtualCenter host: %q. err=%v", manager.VcenterConfig.Host, err)
-		return nil, err
-	}
+	/*
+		err = vcenter.Connect(ctx)
+		if err != nil {
+			klog.Errorf("Failed to connect to VirtualCenter host: %q. err=%v", manager.VcenterConfig.Host, err)
+			return nil, err
+		}
+	*/
 	return vcenter, nil
 }
-*/
+
 // GetUUIDFromProviderID Returns VM UUID from Node's providerID
 func GetUUIDFromProviderID(providerID string) string {
 	return strings.TrimPrefix(providerID, ProviderPrefix)

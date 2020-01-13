@@ -17,7 +17,7 @@ limitations under the License.
 package icsphere
 
 import (
-	//"context"
+	"context"
 	"fmt"
 	//"strings"
 	//"k8s.io/klog"
@@ -35,6 +35,16 @@ type Datacenter struct {
 }
 
 func (dc *Datacenter) String() string {
-	return fmt.Sprintf("Datacenter [Datacenter: %v, VirtualCenterHost: %v]",
-		dc.Datacenter, dc.VirtualCenterHost)
+	return fmt.Sprintf("Datacenter [VirtualCenterHost: %v]", dc.VirtualCenterHost)
+}
+
+func (dc *Datacenter) GetVirtualMachineByUUID(ctx context.Context, uuid string, instanceUUID bool) (*VirtualMachine, error) {
+	return nil, nil
+}
+
+func AsyncGetAllDatacenters(ctx context.Context, buffSize int) (<-chan *Datacenter, <-chan error) {
+	dcsChan := make(chan *Datacenter, buffSize)
+	errChan := make(chan error, 1)
+	//go asyncGetAllDatacenters(ctx, dcsChan, errChan)
+	return dcsChan, errChan
 }
