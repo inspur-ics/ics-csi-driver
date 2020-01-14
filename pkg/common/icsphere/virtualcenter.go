@@ -17,7 +17,7 @@ limitations under the License.
 package icsphere
 
 import (
-	//"context"
+	"context"
 	"fmt"
 	"sync"
 	//csictx "github.com/rexray/gocsi/context"
@@ -70,4 +70,10 @@ func (vcc *VirtualCenterConfig) String() string {
 		"Username: %v, Password: %v, Insecure: %v, RoundTripperCount: %v, "+
 		"DatacenterPaths: %v]", vcc.Scheme, vcc.Host, vcc.Port, vcc.Username,
 		vcc.Password, vcc.Insecure, vcc.RoundTripperCount, vcc.DatacenterPaths)
+}
+
+func (vc *VirtualCenter) GetDatacenters(ctx context.Context) ([]*Datacenter, error) {
+	var dcs []*Datacenter
+
+	return dcs, nil
 }

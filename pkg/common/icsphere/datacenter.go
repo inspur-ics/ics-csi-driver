@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 	//"strings"
-	//"k8s.io/klog"
+	"k8s.io/klog"
 )
 
 // DatastoreInfoProperty refers to the property name info for the Datastore
@@ -42,9 +42,54 @@ func (dc *Datacenter) GetVirtualMachineByUUID(ctx context.Context, uuid string, 
 	return nil, nil
 }
 
+func asyncGetAllDatacenters(ctx context.Context, dcsChan chan<- *Datacenter, errChan chan<- error) {
+	defer close(dcsChan)
+	defer close(errChan)
+
+	for _, vc := range GetVirtualCenterManager().GetAllVirtualCenters() {
+		klog.V(5).Infof("VirtualCenter:%+v", vc)
+		// If the context was canceled, we stop looking for more Datacenters.
+		select {
+		case <-ctx.Done():
+			err := ctx.Err()
+			klog.V(2).Infof("Context was done, returning with err: %v", err)
+			errChan <- err
+			return
+		default:
+		}
+		/*
+			if err := vc.Connect(ctx); err != nil {
+				klog.Errorf("Failed connecting to VC %q with err: %v", vc.Config.Host, err)
+				errChan <- err
+				return
+			}
+		*/
+		dcs, err := vc.GetDatacenters(ctx)
+		if err != nil {
+			klog.Errorf("Failed to fetch datacenters for vc %v with err: %v", vc.Config.Host, err)
+			errChan <- err
+			return
+		}
+
+		for _, dc := range dcs {
+			// If the context was canceled, we don't return more Datacenters.
+			select {
+			case <-ctx.Done():
+				err := ctx.Err()
+				klog.V(2).Infof("Context was done, returning with err: %v", err)
+				errChan <- err
+				return
+			default:
+				klog.V(2).Infof("Publishing datacenter %v", dc)
+				dcsChan <- dc
+			}
+		}
+	}
+}
+
 func AsyncGetAllDatacenters(ctx context.Context, buffSize int) (<-chan *Datacenter, <-chan error) {
 	dcsChan := make(chan *Datacenter, buffSize)
 	errChan := make(chan error, 1)
-	//go asyncGetAllDatacenters(ctx, dcsChan, errChan)
+	go asyncGetAllDatacenters(ctx, dcsChan, errChan)
 	return dcsChan, errChan
 }
