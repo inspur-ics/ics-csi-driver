@@ -1,6 +1,7 @@
 module ics-csi-driver
 
 replace (
+	github.com/go-resty/resty => gopkg.in/resty.v1 v1.12.0
 	k8s.io/api => k8s.io/kubernetes/staging/src/k8s.io/api v0.0.0-20200112230737-36e40fb85029
 	k8s.io/apimachinery => k8s.io/kubernetes/staging/src/k8s.io/apimachinery v0.0.0-20200112230737-36e40fb85029
 	k8s.io/apiserver => k8s.io/kubernetes/staging/src/k8s.io/apiserver v0.0.0-20200112230737-36e40fb85029
@@ -11,6 +12,8 @@ replace (
 require (
 	github.com/akutz/gofsutil v0.1.2
 	github.com/container-storage-interface/spec v1.2.0
+	github.com/go-resty/resty v1.12.0 // indirect
+	github.com/inspur-ics/ics-go-sdk v0.0.0-20200114080747-2f6961242d5c
 	github.com/rexray/gocsi v1.1.0
 	golang.org/x/lint v0.0.0-20190313153728-d0100b6bd8b3 // indirect
 	google.golang.org/grpc v1.26.0

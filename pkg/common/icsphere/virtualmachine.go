@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/inspur-ics/ics-go-sdk/client/types"
 	"k8s.io/klog"
 	"sync"
 )
@@ -34,14 +35,14 @@ type VirtualMachine struct {
 	// UUID represents the virtual machine's UUID.
 	UUID string
 	// VirtualMachine represents the virtual machine.
-	//*object.VirtualMachine
+	*types.VirtualMachine
 	// Datacenter represents the datacenter to which the virtual machine belongs.
 	Datacenter *Datacenter
 }
 
 func (vm *VirtualMachine) String() string {
-	return fmt.Sprintf("VirtualMachine [VirtualCenterHost: %v, UUID: %v, Datacenter: %v]",
-		vm.VirtualCenterHost, vm.UUID, vm.Datacenter)
+	return fmt.Sprintf("VM [Name: %v, Desc: %v, UUID: %v, Datacenter: %v]",
+		vm.VirtualMachine.Name, vm.VirtualMachine.Description, vm.UUID, vm.Datacenter)
 }
 
 // GetAllAccessibleDatastores gets the list of accessible Datastores for the given Virtual Machine
@@ -83,28 +84,27 @@ func (vm *VirtualMachine) Renew(reconnect bool) error {
 const (
 	// poolSize is the number of goroutines to run while trying to find a
 	// virtual machine.
-	poolSize = 8
+	poolSize = 4
 	// dcBufferSize is the buffer size for the channel that is used to
 	// asynchronously receive *Datacenter instances.
 	dcBufferSize = poolSize * 10
 )
 
-// GetVirtualMachineByUUID returns virtual machine given its UUID in entire VC.
+// GetVirtualMachineByNameOrUUID returns virtual machine given its UUID in entire VC.
 // If instanceUuid is set to true, then UUID is an instance UUID.
 // In this case, this function searches for virtual machines whose instance UUID matches the given uuid.
 // If instanceUuid is set to false, then UUID is BIOS UUID.
 // In this case, this function searches for virtual machines whose BIOS UUID matches the given uuid.
-func GetVirtualMachineByUUID(uuid string, instanceUUID bool) (*VirtualMachine, error) {
+func GetVirtualMachineByNameOrUUID(name string, uuid string, instanceUUID bool) (*VirtualMachine, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	klog.V(2).Infof("Initiating asynchronous datacenter listing with uuid %s", uuid)
+	klog.V(2).Infof("Initiating asynchronous datacenter listing with name:%s uuid %s", name, uuid)
 	dcsChan, errChan := AsyncGetAllDatacenters(ctx, dcBufferSize)
 
 	var wg sync.WaitGroup
-	var nodeVM *VirtualMachine
-	var poolErr error
-
+	var vm, nodeVM *VirtualMachine
+	var err, poolErr error
 	for i := 0; i < poolSize; i++ {
 		wg.Add(1)
 		go func() {
@@ -114,15 +114,15 @@ func GetVirtualMachineByUUID(uuid string, instanceUUID bool) (*VirtualMachine, e
 				case err, ok := <-errChan:
 					if !ok {
 						// Async function finished.
-						klog.V(2).Infof("AsyncGetAllDatacenters finished with uuid %s", uuid)
+						klog.V(2).Infof("AsyncGetAllDatacenters finished with name %s uuid %s", name, uuid)
 						return
 					} else if err == context.Canceled {
 						// Canceled by another instance of this goroutine.
-						klog.V(2).Infof("AsyncGetAllDatacenters ctx was canceled with uuid %s", uuid)
+						klog.V(2).Infof("AsyncGetAllDatacenters ctx was canceled with name %s uuid %s", name, uuid)
 						return
 					} else {
 						// Some error occurred.
-						klog.Errorf("AsyncGetAllDatacenters with uuid %s sent an error: %v", uuid, err)
+						klog.Errorf("AsyncGetAllDatacenters with name %s uuid %s sent an error: %v", name, uuid, err)
 						poolErr = err
 						return
 					}
@@ -130,27 +130,33 @@ func GetVirtualMachineByUUID(uuid string, instanceUUID bool) (*VirtualMachine, e
 				case dc, ok := <-dcsChan:
 					if !ok {
 						// Async function finished.
-						klog.V(2).Infof("AsyncGetAllDatacenters finished with uuid %s", uuid)
+						klog.V(2).Infof("AsyncGetAllDatacenters finished with name %s uuid %s", name, uuid)
 						return
 					}
 
 					// Found some Datacenter object.
-					klog.V(2).Infof("AsyncGetAllDatacenters with uuid %s sent a dc %v", uuid, dc)
-					if vm, err := dc.GetVirtualMachineByUUID(context.Background(), uuid, instanceUUID); err != nil {
+					klog.V(2).Infof("AsyncGetAllDatacenters with name %s uuid %s sent a dc %v", name, uuid, dc)
+					if uuid != "" {
+						vm, err = dc.GetVirtualMachineByUUID(context.Background(), uuid, instanceUUID)
+					} else {
+						vm, err = dc.GetVirtualMachineByName(context.Background(), name)
+					}
+
+					if err != nil {
 						if err == ErrVMNotFound {
 							// Didn't find VM on this DC, so, continue searching on other DCs.
-							klog.V(2).Infof("Couldn't find VM given uuid %s on DC %v with err: %v, continuing search", uuid, dc, err)
+							klog.V(2).Infof("Couldn't find VM given name %s uuid %s on DC %v with err: %v, continuing search", name, uuid, dc, err)
 							continue
 						} else {
 							// Some serious error occurred, so stop the async function.
-							klog.Errorf("Failed finding VM given uuid %s on DC %v with err: %v, canceling context", uuid, dc, err)
+							klog.Errorf("Failed finding VM given name %s uuid %s on DC %v with err: %v, canceling context", name, uuid, dc, err)
 							cancel()
 							poolErr = err
 							return
 						}
 					} else {
 						// Virtual machine was found, so stop the async function.
-						klog.V(2).Infof("Found VM %v given uuid %s on DC %v, canceling context", vm, uuid, dc)
+						klog.V(2).Infof("Found VM %v given name %s uuid %s on DC %v, canceling context", vm, name, uuid, dc)
 						nodeVM = vm
 						cancel()
 						return
@@ -162,13 +168,13 @@ func GetVirtualMachineByUUID(uuid string, instanceUUID bool) (*VirtualMachine, e
 	wg.Wait()
 
 	if nodeVM != nil {
-		klog.V(2).Infof("Returning VM %v for UUID %s", nodeVM, uuid)
+		klog.V(2).Infof("Returning VM %v for Name %s UUID %s", nodeVM, name, uuid)
 		return nodeVM, nil
 	} else if poolErr != nil {
-		klog.Errorf("Returning err: %v for UUID %s", poolErr, uuid)
+		klog.Errorf("Returning err: %v for Name %s UUID %s", poolErr, name, uuid)
 		return nil, poolErr
 	} else {
-		klog.Errorf("Returning VM not found err for UUID %s", uuid)
+		klog.Errorf("Returning VM not found err for Name %s UUID %s", name, uuid)
 		return nil, ErrVMNotFound
 	}
 }

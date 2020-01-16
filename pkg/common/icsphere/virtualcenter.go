@@ -19,17 +19,13 @@ package icsphere
 import (
 	"context"
 	"fmt"
+	icsgo "github.com/inspur-ics/ics-go-sdk"
+	"github.com/inspur-ics/ics-go-sdk/client"
+	icsdc "github.com/inspur-ics/ics-go-sdk/datacenter"
+	"k8s.io/klog"
 	"sync"
 	//csictx "github.com/rexray/gocsi/context"
-	//"k8s.io/klog"
 	//cnsconfig "ics-csi-driver/pkg/common/config"
-)
-
-const (
-	// DefaultScheme is the default connection scheme.
-	DefaultScheme = "https"
-	// DefaultRoundTripperCount is the default SOAP round tripper count.
-	DefaultRoundTripperCount = 3
 )
 
 // VirtualCenter holds details of a virtual center instance.
@@ -37,9 +33,7 @@ type VirtualCenter struct {
 	// Config represents the virtual center configuration.
 	Config *VirtualCenterConfig
 	// Client represents the govmomi client instance for the connection.
-	//Client *govmomi.Client
-	// PbmClient represents the govmomi PBM Client instance.
-	//PbmClient *pbm.Client
+	Client *client.Client
 	// CnsClient represents the CNS client instance.
 	//CnsClient       *cns.Client
 	credentialsLock sync.Mutex
@@ -52,7 +46,7 @@ type VirtualCenterConfig struct {
 	// Host represents the virtual center host address.
 	Host string
 	// Port represents the virtual center host port.
-	Port int
+	Port string
 	// Username represents the virtual center username.
 	Username string
 	// Password represents the virtual center password in clear text.
@@ -72,8 +66,40 @@ func (vcc *VirtualCenterConfig) String() string {
 		vcc.Password, vcc.Insecure, vcc.RoundTripperCount, vcc.DatacenterPaths)
 }
 
+// connect creates a connection to the virtual center host.
+func (vc *VirtualCenter) Connect(ctx context.Context) error {
+
+	conn := &icsgo.ICSConnection{
+		Username: vc.Config.Username,
+		Password: vc.Config.Password,
+		Hostname: vc.Config.Host,
+		Port:     vc.Config.Port,
+		Insecure: vc.Config.Insecure,
+	}
+
+	client, err := conn.GetClient()
+	if err != nil {
+		klog.Errorf("virtual center connect failed: vc %s\n", vc.Config.Host)
+		return err
+	}
+	vc.Client = client
+	klog.V(4).Infof("virtual center connect successfully: vc %s\n", vc.Config.Host)
+	return nil
+}
+
 func (vc *VirtualCenter) GetDatacenters(ctx context.Context) ([]*Datacenter, error) {
 	var dcs []*Datacenter
 
-	return dcs, nil
+	dcService := icsdc.NewDatacenterService(vc.Client)
+	dcList, err := dcService.GetAllDatacenters(ctx)
+	if err != nil {
+		klog.Errorf("get datacenter list faild for vc: %s\n", vc.Config.Host)
+	} else {
+		klog.V(5).Infof("successfully get datacenter list for vc: %s\n", vc.Config.Host)
+		for _, dcItem := range dcList {
+			dc := &Datacenter{Datacenter: dcItem, VirtualCenterHost: vc.Config.Host, VCenter: vc}
+			dcs = append(dcs, dc)
+		}
+	}
+	return dcs, err
 }

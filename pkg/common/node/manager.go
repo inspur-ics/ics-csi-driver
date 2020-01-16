@@ -44,6 +44,7 @@ type Manager interface {
 	// scans all virtual centers registered on the VirtualCenterManager for a
 	// virtual machine with the given UUID.
 	DiscoverNode(nodeUUID string) error
+	DiscoverNodeByName(nodeName string) error
 	// GetNode refreshes and returns the VirtualMachine for a registered node
 	// given its UUID.
 	GetNode(nodeUUID string) (*ics.VirtualMachine, error)
@@ -99,7 +100,7 @@ func (m *nodeManager) SetKubernetesClient(client clientset.Interface) {
 func (m *nodeManager) RegisterNode(nodeUUID string, nodeName string) error {
 	m.nodeNameToUUID.Store(nodeName, nodeUUID)
 	klog.V(2).Infof("Successfully registered node: %q with nodeUUID %q", nodeName, nodeUUID)
-	err := m.DiscoverNode(nodeUUID)
+	err := m.DiscoverNodeByName(nodeName)
 	if err != nil {
 		klog.Errorf("Failed to discover VM with uuid: %q for node: %q", nodeUUID, nodeName)
 		return err
@@ -108,10 +109,29 @@ func (m *nodeManager) RegisterNode(nodeUUID string, nodeName string) error {
 	return nil
 }
 
+// DiscoverNodeByName discovers a registered node given its Name from vCenter.
+// If node is not found in the vCenter for the given Name, for ErrVMNotFound is returned to the caller
+func (m *nodeManager) DiscoverNodeByName(nodeName string) error {
+	vm, err := ics.GetVirtualMachineByNameOrUUID(nodeName, "", false)
+	if err != nil {
+		klog.Errorf("Couldn't find VM instance with nodeUUID %s, failed to discover with err: %v", nodeName, err)
+		return err
+	}
+
+	nodeUUID, found := m.nodeNameToUUID.Load(nodeName)
+	if !found {
+		klog.Errorf("Node not found with nodeName %s", nodeName)
+		return ErrNodeNotFound
+	}
+	m.nodeVMs.Store(nodeUUID, vm)
+	klog.V(2).Infof("Successfully discovered node with nodeUUID %s in vm %v", nodeUUID, vm)
+	return nil
+}
+
 // DiscoverNode discovers a registered node given its UUID from vCenter.
 // If node is not found in the vCenter for the given UUID, for ErrVMNotFound is returned to the caller
 func (m *nodeManager) DiscoverNode(nodeUUID string) error {
-	vm, err := ics.GetVirtualMachineByUUID(nodeUUID, false)
+	vm, err := ics.GetVirtualMachineByNameOrUUID("", nodeUUID, false)
 	if err != nil {
 		klog.Errorf("Couldn't find VM instance with nodeUUID %s, failed to discover with err: %v", nodeUUID, err)
 		return err
