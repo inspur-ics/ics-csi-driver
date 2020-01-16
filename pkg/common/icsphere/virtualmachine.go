@@ -182,5 +182,6 @@ func GetVirtualMachineByNameOrUUID(name string, uuid string, instanceUUID bool) 
 // IsInZoneRegion checks if virtual machine belongs to specified zone and region
 // This function returns true if virtual machine belongs to specified zone/region, else returns false.
 func (vm *VirtualMachine) IsInZoneRegion(ctx context.Context, zoneCategoryName string, regionCategoryName string, zoneValue string, regionValue string) (bool, error) {
-	return false, nil
+	klog.V(4).Infof("IsInZoneRegion: called with zoneCategoryName: %s, regionCategoryName: %s, zoneValue: %s, regionValue: %s", zoneCategoryName, regionCategoryName, zoneValue, regionValue)
+	return false, ErrVMNotFound
 }

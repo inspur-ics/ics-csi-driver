@@ -132,6 +132,50 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 		DatastoreID: datastoreID,
 	}
 
+	var err error
+	var sharedDatastores []*ics.DatastoreInfo
+	var datastoreTopologyMap = make(map[string][]map[string]string)
+
+	// Get accessibility
+	topologyRequirement := req.GetAccessibilityRequirements()
+	if topologyRequirement != nil {
+		// Get shared accessible datastores for matching topology requirement
+		if c.manager.CnsConfig.Labels.Zone == "" || c.manager.CnsConfig.Labels.Region == "" {
+			// if zone and region label not specified in the config secret, then return NotFound error.
+			errMsg := fmt.Sprintf("Zone/Region category names not specified in the csi config secret")
+			klog.Errorf(errMsg)
+			return nil, status.Error(codes.NotFound, errMsg)
+		}
+		sharedDatastores, datastoreTopologyMap, err = c.nodeMgr.GetSharedDatastoresInTopology(ctx, topologyRequirement, c.manager.CnsConfig.Labels.Zone, c.manager.CnsConfig.Labels.Region)
+		if err != nil || len(sharedDatastores) == 0 {
+			msg := fmt.Sprintf("Failed to get shared datastores in topology: %+v. Error: %+v", topologyRequirement, err)
+			klog.Errorf(msg)
+			return nil, status.Error(codes.NotFound, msg)
+		}
+		klog.V(4).Infof("Shared datastores [%+v] retrieved for topologyRequirement [%+v] with datastoreTopologyMap [+%v]", sharedDatastores, topologyRequirement, datastoreTopologyMap)
+		if createVolumeSpec.DatastoreID != "" {
+			// Check datastoreURL specified in the storageclass is accessible from topology
+			isDataStoreAccessible := false
+			for _, sharedDatastore := range sharedDatastores {
+				_ = sharedDatastore
+				//if sharedDatastore.Info.ID == createVolumeSpec.DatastoreID {
+				//	isDataStoreAccessible = true
+				break
+				//}
+			}
+			if !isDataStoreAccessible {
+				errMsg := fmt.Sprintf("DatastoreURL: %s specified in the storage class is not accessible in the topology:[+%v]",
+					createVolumeSpec.DatastoreID, topologyRequirement)
+				klog.Errorf(errMsg)
+				return nil, status.Error(codes.InvalidArgument, errMsg)
+			}
+		}
+
+		msg := fmt.Sprintf("Failed to create volume. Error: Topology Not Support %+v", topologyRequirement)
+		klog.Error(msg)
+		return nil, status.Errorf(codes.Internal, msg)
+	}
+
 	volumeID, err := common.CreateVolumeUtil(ctx, &createVolumeSpec)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to create volume. Error: %+v", err)

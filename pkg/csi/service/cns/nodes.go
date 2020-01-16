@@ -124,7 +124,7 @@ func (nodes *Nodes) GetSharedDatastoresInTopology(ctx context.Context, topologyR
 			isNodeInZoneRegion, err := nodeVM.IsInZoneRegion(ctx, zoneCategoryName, regionCategoryName, zoneValue, regionValue)
 			if err != nil {
 				klog.Errorf("Error checking if node VM: %v belongs to zone [%s] and region [%s]. err: %+v", nodeVM, zoneValue, regionValue, err)
-				return nil, err
+				//return nil, err
 			}
 			if isNodeInZoneRegion {
 				nodeVMsInZoneAndRegion = append(nodeVMsInZoneAndRegion, nodeVM)
@@ -174,18 +174,20 @@ func (nodes *Nodes) GetSharedDatastoresInTopology(ctx context.Context, topologyR
 	var sharedDatastores []*ics.DatastoreInfo
 	var datastoreTopologyMap = make(map[string][]map[string]string)
 	if topologyRequirement != nil && topologyRequirement.GetPreferred() != nil {
-		klog.V(3).Infoln("Using preferred topology")
-		sharedDatastores, datastoreTopologyMap, err = getSharedDatastoresInTopology(topologyRequirement.GetPreferred())
+		prefTopology := topologyRequirement.GetPreferred()
+		klog.V(3).Infof("Using preferred topology %+v", prefTopology)
+		sharedDatastores, datastoreTopologyMap, err = getSharedDatastoresInTopology(prefTopology)
 		if err != nil {
-			klog.Errorf("Error occurred  while finding shared datastores from preferred topology: %+v", topologyRequirement.GetPreferred())
+			klog.Errorf("Error occurred  while finding shared datastores from preferred topology: %+v", prefTopology)
 			return nil, nil, err
 		}
 	}
 	if len(sharedDatastores) == 0 && topologyRequirement != nil && topologyRequirement.GetRequisite() != nil {
-		klog.V(3).Infoln("Using requisite topology")
-		sharedDatastores, datastoreTopologyMap, err = getSharedDatastoresInTopology(topologyRequirement.GetRequisite())
+		reqTopology := topologyRequirement.GetRequisite()
+		klog.V(3).Infof("Using requisite topology %+v", reqTopology)
+		sharedDatastores, datastoreTopologyMap, err = getSharedDatastoresInTopology(reqTopology)
 		if err != nil {
-			klog.Errorf("Error occurred  while finding shared datastores from requisite topology: %+v", topologyRequirement.GetRequisite())
+			klog.Errorf("Error occurred  while finding shared datastores from requisite topology: %+v", reqTopology)
 			return nil, nil, err
 		}
 	}
