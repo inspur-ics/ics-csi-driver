@@ -322,3 +322,53 @@ type DataCenterTopology struct {
 	VmType      interface{}          `json:"vmType"`      //null
 	HostId      interface{}          `json:"hostId"`      //null
 }
+
+type TagInfo struct {
+	Id          string      `json:"id"`          //"5c2d677d-2934-49ca-8ebd-3be9810b0f60"
+	TagName     string      `json:"tagName"`     //"test-region-a"
+	UserName    interface{} `json:"userName"`    //null
+	CreateTime  interface{} `json:"createTime"`  //null
+	Description string      `json:"description"` //null
+	Checked     bool        `json:"checked"`     //false
+}
+
+type ClusterInfo struct {
+	Name    string    `json:"name"`    //"cluster"
+	Id      string    `json:"id"`      //"8a878bda6f7012c7016f87e979120798"
+	HostNum int       `json:"hostNum"` //1
+	Tags    []TagInfo `json:"tags"`
+}
+
+type ClusterListRsp struct {
+	Items []ClusterInfo `json:"items"`
+}
+
+type HostInfo struct {
+	Id             string    `json:"id"`             //"792b1e3f-8be6-43de-b8c7-27a0327dcd97"
+	Name           string    `json:"name"`           //"10.7.11.90"
+	HostName       string    `json:"hostName"`       //"allinone-88945-43735"
+	DataCenterId   string    `json:"dataCenterId"`   //"3f0094542ebb11eaa2691a130ac12531"
+	DataCenterName string    `json:"dataCenterName"` //"默认数据中心"
+	ClusterName    string    `json:"clusterName"`    //"cluster"
+	ClusterId      string    `json:"clusterId"`      //"8a878bda6f7012c7016f87e979120798"
+	Status         string    `json:"status"`         //"CONNECTED"
+	Tags           []TagInfo `json:"tags"`
+}
+
+type HostListRsp struct {
+	Items []HostInfo `json:"items"`
+}
+
+type DatastoreInfo struct {
+	DataStoreType string  `json:"dataStoreType"` //"LOCAL"
+	Id            string  `json:"id"`            //"8a878bda6f6f3ca4016f6f458b50003c"
+	Name          string  `json:"name"`          //"local"
+	MountPath     string  `json:"mountPath"`     //"/datastore/4e76e7ce-14ea-4865-8a99-05dd32505bb4"
+	Capacity      float64 `json:"capacity"`      //1547.03
+	UsedCapacity  float64 `json:"usedCapacity"`  //305.58
+	AvailCapacity float64 `json:"availCapacity"` //1241.45
+	DataCenterId  string  `json:"dataCenterId"`  //"3f0094542ebb11eaa2691a130ac12531"
+	HostId        string  `json:"hostId"`        //"792b1e3f-8be6-43de-b8c7-27a0327dcd97"
+	MountStatus   string  `json:"mountStatus"`   //"MOUNTED"
+	Uuid          string  `json:"uuid"`          //"4e76e7ce-14ea-4865-8a99-05dd32505bb4"
+}

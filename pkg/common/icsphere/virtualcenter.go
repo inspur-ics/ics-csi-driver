@@ -22,7 +22,6 @@ import (
 	icsgo "github.com/inspur-ics/ics-go-sdk"
 	"github.com/inspur-ics/ics-go-sdk/client"
 	icsdc "github.com/inspur-ics/ics-go-sdk/datacenter"
-	"ics-csi-driver/pkg/common/rest"
 	"k8s.io/klog"
 	"strconv"
 	"sync"
@@ -104,20 +103,4 @@ func (vc *VirtualCenter) GetDatacenters(ctx context.Context) ([]*Datacenter, err
 		}
 	}
 	return dcs, err
-}
-
-func (vc *VirtualCenter) GetTopologys(ctx context.Context) ([]rest.DataCenterTopology, error) {
-	rp, err := rest.NewRestProxy()
-	if err != nil {
-		klog.Error("create restProxy failed.")
-		return nil, err
-	}
-
-	dcTopologys, err := rest.GetDataCenterTopology(rp)
-	if err != nil {
-		klog.Error("get datacenter topology failed.")
-		return nil, err
-	}
-
-	return dcTopologys, nil
 }

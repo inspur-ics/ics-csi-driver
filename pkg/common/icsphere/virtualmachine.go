@@ -188,12 +188,7 @@ func GetVirtualMachineByNameOrUUID(name string, uuid string, instanceUUID bool) 
 }
 
 func (vm *VirtualMachine) GetAncestors(ctx context.Context) ([]IcsEntity, error) {
-	vc, err := GetVirtualCenterManager().GetVirtualCenter(vm.VirtualCenterHost)
-	if err != nil {
-		klog.Errorf("Failed to get vcenter for VM %v with err: %v", vm, err)
-		return nil, err
-	}
-	dcTopologys, err := vc.GetTopologys(ctx)
+	dcTopologys, err := GetDatacenterTopologys(ctx)
 	if err != err {
 		klog.Error("Failed to get datacenter topology.")
 		return nil, err
@@ -229,13 +224,43 @@ func (vm *VirtualMachine) GetAncestors(ctx context.Context) ([]IcsEntity, error)
 
 // GetZoneRegion returns zone and region of the node vm
 func (vm *VirtualMachine) GetZoneRegion(ctx context.Context, zoneCategoryName string, regionCategoryName string) (zone string, region string, err error) {
-	objects, err := vm.GetAncestors(ctx)
+	icsElems, err := vm.GetAncestors(ctx)
 	if err != nil {
 		klog.Errorf("GetAncestors failed for %s with err %v", vm.VirtualMachine.Name, err)
 		return "", "", err
 	}
-	klog.V(5).Infof("Topology:%+v", objects)
-	return "", "", nil
+	klog.V(5).Infof("Vm's ancestors:%+v", icsElems)
+
+	zone, region = "", ""
+	for _, elem := range icsElems {
+		if elem.Type == "DATACENTER" && vm.Datacenter.Datacenter.Description != "" {
+			region = vm.Datacenter.Datacenter.Description
+			continue
+		}
+		if elem.Type == "CLUSTER" && elem.Id != "" {
+			clusterTags, err := GetClusterTags(ctx, elem.Id)
+			if err != nil {
+				return "", "", err
+			}
+			klog.V(5).Infof("cluster %s tags:%v", elem.Name, clusterTags)
+			for _, tag := range clusterTags {
+				if tag.Description == regionCategoryName && region == "" {
+					region = tag.TagName
+					continue
+				}
+				if tag.Description == zoneCategoryName && zone == "" {
+					zone = tag.TagName
+				}
+			}
+			if zone != "" && region != "" {
+				return zone, region, nil
+			}
+		}
+		//if elem.Type == "HOST" && elem.Id != "" {
+		//
+		//}
+	}
+	return zone, region, nil
 }
 
 // IsInZoneRegion checks if virtual machine belongs to specified zone and region
@@ -248,6 +273,8 @@ func (vm *VirtualMachine) IsInZoneRegion(ctx context.Context, zoneCategoryName s
 		klog.Errorf("failed to get accessibleTopology for vm: %s, err: %v", vm.VirtualMachine.Name, err)
 		return false, err
 	}
+	klog.V(4).Infof("VM [%s] belongs to zone [%s] and region [%s]", vm.VirtualMachine.Name, vmZone, vmRegion)
+
 	if regionValue == "" && zoneValue != "" && vmZone == zoneValue {
 		// region is not specified, if zone matches with look up zone value, return true
 		klog.V(4).Infof("VM [%s] belongs to zone [%s]", vm.VirtualMachine.Name, zoneValue)

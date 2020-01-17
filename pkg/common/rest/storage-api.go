@@ -268,3 +268,79 @@ func GetDataCenterTopology(rp RestProxyInterface) ([]DataCenterTopology, RestErr
 
 	return dcTopologys, nil
 }
+
+func GetTagList(rp RestProxyInterface) ([]TagInfo, RestError) {
+	var msg string
+	var tagList []TagInfo
+	stat, body, err := rp.Send("GET", "tags", nil)
+	if err != nil {
+		msg = fmt.Sprintf("get tag list failed: stat %s err %s", stat, err.Error())
+		klog.Errorf("%s", msg)
+		return tagList, GetError(RestRequestMalfunction, msg)
+	}
+
+	if err := json.Unmarshal(body, &tagList); err != nil {
+		msg = fmt.Sprintf("tag list unmarshal failed: %s", err.Error())
+		klog.Errorf("%s", msg)
+		return tagList, GetError(RestRequestMalfunction, msg)
+	}
+	return tagList, nil
+}
+
+func GetClusterList(rp RestProxyInterface) ([]ClusterInfo, RestError) {
+	var msg string
+	var clusterList []ClusterInfo
+	stat, body, err := rp.Send("GET", "clusters", nil)
+	if err != nil {
+		msg = fmt.Sprintf("get cluster list failed: stat %s err %s", stat, err.Error())
+		klog.Errorf("%s", msg)
+		return clusterList, GetError(RestRequestMalfunction, msg)
+	}
+	var clusterListRsp ClusterListRsp
+	if err := json.Unmarshal(body, &clusterListRsp); err != nil {
+		msg = fmt.Sprintf("cluster list unmarshal failed: %s", err.Error())
+		klog.Errorf("%s", msg)
+		return clusterList, GetError(RestRequestMalfunction, msg)
+	}
+
+	return clusterListRsp.Items, nil
+}
+
+func GetHostList(rp RestProxyInterface) ([]HostInfo, RestError) {
+	var msg string
+	var hostList []HostInfo
+	stat, body, err := rp.Send("GET", "hosts", nil)
+	if err != nil {
+		msg = fmt.Sprintf("get host list failed: stat %s err %s", stat, err.Error())
+		klog.Errorf("%s", msg)
+		return hostList, GetError(RestRequestMalfunction, msg)
+	}
+
+	var hostListRsp HostListRsp
+	if err := json.Unmarshal(body, &hostListRsp); err != nil {
+		msg = fmt.Sprintf("host list unmarshal failed: %s", err.Error())
+		klog.Errorf("%s", msg)
+		return hostList, GetError(RestRequestMalfunction, msg)
+	}
+
+	return hostListRsp.Items, nil
+}
+
+func GetHostAccessibleDatastoreList(rp RestProxyInterface, hostId string) ([]DatastoreInfo, RestError) {
+	var msg string
+	var datastoreList []DatastoreInfo
+	addr := fmt.Sprintf("hosts/%s/availstorages", hostId)
+	stat, body, err := rp.Send("GET", addr, nil)
+	if err != nil {
+		msg = fmt.Sprintf("get datastore list failed: stat %s err %s", stat, err.Error())
+		klog.Errorf("%s", msg)
+		return datastoreList, GetError(RestRequestMalfunction, msg)
+	}
+
+	if err := json.Unmarshal(body, &datastoreList); err != nil {
+		msg = fmt.Sprintf("datastore list unmarshal failed: %s", err.Error())
+		klog.Errorf("%s", msg)
+		return datastoreList, GetError(RestRequestMalfunction, msg)
+	}
+	return datastoreList, nil
+}

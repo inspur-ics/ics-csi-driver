@@ -17,8 +17,11 @@ limitations under the License.
 package icsphere
 
 import (
+	"context"
 	"errors"
 	"ics-csi-driver/pkg/common/config"
+	"ics-csi-driver/pkg/common/rest"
+	"k8s.io/klog"
 	"strconv"
 	"strings"
 )
@@ -61,4 +64,61 @@ func GetVcenterIPs(cfg *config.Config) ([]string, error) {
 		err = errors.New("Unable get vCenter Hosts from Config")
 	}
 	return vCenterIPs, err
+}
+
+func GetDatacenterTopologys(ctx context.Context) ([]rest.DataCenterTopology, error) {
+	rp, err := rest.NewRestProxy()
+	if err != nil {
+		klog.Error("create restProxy failed.")
+		return nil, err
+	}
+
+	dcTopologys, err := rest.GetDataCenterTopology(rp)
+	if err != nil {
+		klog.Error("get datacenter topology failed.")
+		return nil, err
+	}
+
+	return dcTopologys, nil
+}
+
+func GetClusterTags(ctx context.Context, clusterId string) ([]rest.TagInfo, error) {
+	rp, err := rest.NewRestProxy()
+	if err != nil {
+		klog.Error("create restProxy failed.")
+		return nil, err
+	}
+
+	clusterList, err := rest.GetClusterList(rp)
+	if err != nil {
+		klog.Error("get cluster list failed.")
+		return nil, err
+	}
+
+	var tags []rest.TagInfo
+	for _, clusterInfo := range clusterList {
+		if clusterInfo.Id == clusterId {
+			klog.V(5).Infof("get cluster info successfully. %+v", clusterInfo)
+			tags = clusterInfo.Tags
+			break
+		}
+	}
+
+	if len(tags) > 0 {
+		tagList, err := rest.GetTagList(rp)
+		if err != nil {
+			return tags, err
+		}
+		for i := range tags {
+			if len(tags[i].Description) == 0 {
+				for k := range tagList {
+					if tags[i].Id == tagList[k].Id {
+						tags[i].Description = tagList[k].Description
+						break
+					}
+				}
+			}
+		}
+	}
+	return tags, nil
 }
