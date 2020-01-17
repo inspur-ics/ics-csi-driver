@@ -305,3 +305,20 @@ type VmInfoRsp struct {
 type VmListRsp struct {
 	Items []VmInfoRsp `json:"items"`
 }
+
+type DataCenterTopology struct {
+	Id          string               `json:"id"`          //"792b1e3f-8be6-43de-b8c7-27a0327dcd97"
+	Text        string               `json:"text"`        //"10.7.11.90"
+	IconCls     string               `json:"iconCls"`     //"icon-host"
+	State       string               `json:"state"`       //"CONNECTED"
+	Children    []DataCenterTopology `json:"children"`    //null
+	Name        string               `json:"name"`        //"16"
+	ViewId      string               `json:"viewId"`      //"16"
+	TargetType  string               `json:"targetType"`  //"HOST"
+	InnerName   interface{}          `json:"innerName"`   //null
+	ServiceType interface{}          `json:"serviceType"` //null
+	StorageType interface{}          `json:"storageType"` //null
+	HciType     interface{}          `json:"hciType"`     //null
+	VmType      interface{}          `json:"vmType"`      //null
+	HostId      interface{}          `json:"hostId"`      //null
+}

@@ -249,3 +249,22 @@ func GetTaskState(rp RestProxyInterface, taskId string) (string, RestError) {
 		}
 	}
 }
+
+func GetDataCenterTopology(rp RestProxyInterface) ([]DataCenterTopology, RestError) {
+	var msg string
+	var dcTopologys []DataCenterTopology
+	stat, body, err := rp.Send("GET", "topologys/dataCenterItemDto", nil)
+	if err != nil {
+		msg = fmt.Sprintf("get datacenter topology failed: stat %s err %s", stat, err.Error())
+		klog.Errorf("%s", msg)
+		return dcTopologys, GetError(RestRequestMalfunction, msg)
+	}
+
+	if err := json.Unmarshal(body, &dcTopologys); err != nil {
+		msg = fmt.Sprintf("datacenter topology unmarshal failed: %s", err.Error())
+		klog.Errorf("%s", msg)
+		return dcTopologys, GetError(RestRequestMalfunction, msg)
+	}
+
+	return dcTopologys, nil
+}

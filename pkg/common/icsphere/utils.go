@@ -19,6 +19,7 @@ package icsphere
 import (
 	"errors"
 	"ics-csi-driver/pkg/common/config"
+	"strconv"
 	"strings"
 )
 
@@ -31,7 +32,10 @@ func GetVirtualCenterConfig(cfg *config.Config) (*VirtualCenterConfig, error) {
 		return nil, err
 	}
 	host := vCenterIPs[0]
-	port := cfg.VirtualCenter[host].VCenterPort
+	port, err := strconv.Atoi(cfg.VirtualCenter[host].VCenterPort)
+	if err != nil {
+		return nil, err
+	}
 	vcConfig := &VirtualCenterConfig{
 		Host:            host,
 		Port:            port,

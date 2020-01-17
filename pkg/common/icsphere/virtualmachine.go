@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/inspur-ics/ics-go-sdk/client/types"
+	//"ics-csi-driver/pkg/common/rest"
 	"k8s.io/klog"
 	"sync"
 )
@@ -38,6 +39,13 @@ type VirtualMachine struct {
 	*types.VirtualMachine
 	// Datacenter represents the datacenter to which the virtual machine belongs.
 	Datacenter *Datacenter
+}
+
+type IcsEntity struct {
+	Id    string
+	Name  string
+	State string
+	Type  string
 }
 
 func (vm *VirtualMachine) String() string {
@@ -179,9 +187,80 @@ func GetVirtualMachineByNameOrUUID(name string, uuid string, instanceUUID bool) 
 	}
 }
 
+func (vm *VirtualMachine) GetAncestors(ctx context.Context) ([]IcsEntity, error) {
+	vc, err := GetVirtualCenterManager().GetVirtualCenter(vm.VirtualCenterHost)
+	if err != nil {
+		klog.Errorf("Failed to get vcenter for VM %v with err: %v", vm, err)
+		return nil, err
+	}
+	dcTopologys, err := vc.GetTopologys(ctx)
+	if err != err {
+		klog.Error("Failed to get datacenter topology.")
+		return nil, err
+	}
+	var vmAncestors []IcsEntity
+	for _, dcItem := range dcTopologys {
+		if dcItem.TargetType == "DATACENTER" && dcItem.Id == vm.Datacenter.ID {
+			icsEntity := IcsEntity{Id: dcItem.Id, Name: dcItem.Text, State: dcItem.State, Type: dcItem.TargetType}
+			vmAncestors = append(vmAncestors, icsEntity)
+			if len(dcItem.Children) > 0 {
+				for _, item := range dcItem.Children {
+					if item.TargetType == "HOST" && item.Id == vm.VirtualMachine.HostID {
+						icsEntity = IcsEntity{Id: item.Id, Name: item.Text, State: item.State, Type: item.TargetType}
+						vmAncestors = append(vmAncestors, icsEntity)
+						return vmAncestors, nil
+					} else if item.TargetType == "CLUSTER" && len(item.Children) > 0 {
+						for _, host := range item.Children {
+							if host.TargetType == "HOST" && host.Id == vm.VirtualMachine.HostID {
+								icsEntity = IcsEntity{Id: item.Id, Name: item.Text, State: item.State, Type: item.TargetType}
+								vmAncestors = append(vmAncestors, icsEntity)
+								icsEntity = IcsEntity{Id: host.Id, Name: host.Text, State: host.State, Type: host.TargetType}
+								vmAncestors = append(vmAncestors, icsEntity)
+								return vmAncestors, nil
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return vmAncestors, nil
+}
+
+// GetZoneRegion returns zone and region of the node vm
+func (vm *VirtualMachine) GetZoneRegion(ctx context.Context, zoneCategoryName string, regionCategoryName string) (zone string, region string, err error) {
+	objects, err := vm.GetAncestors(ctx)
+	if err != nil {
+		klog.Errorf("GetAncestors failed for %s with err %v", vm.VirtualMachine.Name, err)
+		return "", "", err
+	}
+	klog.V(5).Infof("Topology:%+v", objects)
+	return "", "", nil
+}
+
 // IsInZoneRegion checks if virtual machine belongs to specified zone and region
 // This function returns true if virtual machine belongs to specified zone/region, else returns false.
 func (vm *VirtualMachine) IsInZoneRegion(ctx context.Context, zoneCategoryName string, regionCategoryName string, zoneValue string, regionValue string) (bool, error) {
 	klog.V(4).Infof("IsInZoneRegion: called with zoneCategoryName: %s, regionCategoryName: %s, zoneValue: %s, regionValue: %s", zoneCategoryName, regionCategoryName, zoneValue, regionValue)
-	return false, ErrVMNotFound
+
+	vmZone, vmRegion, err := vm.GetZoneRegion(ctx, zoneCategoryName, regionCategoryName)
+	if err != nil {
+		klog.Errorf("failed to get accessibleTopology for vm: %s, err: %v", vm.VirtualMachine.Name, err)
+		return false, err
+	}
+	if regionValue == "" && zoneValue != "" && vmZone == zoneValue {
+		// region is not specified, if zone matches with look up zone value, return true
+		klog.V(4).Infof("VM [%s] belongs to zone [%s]", vm.VirtualMachine.Name, zoneValue)
+		return true, nil
+	}
+	if zoneValue == "" && regionValue != "" && vmRegion == regionValue {
+		// zone is not specified, if region matches with look up region value, return true
+		klog.V(4).Infof("VM [%s] belongs to region [%s]", vm.VirtualMachine.Name, regionValue)
+		return true, nil
+	}
+	if vmZone != "" && vmRegion != "" && vmRegion == regionValue && vmZone == zoneValue {
+		klog.V(4).Infof("VM [%s] belongs to zone [%s] and region [%s]", vm.VirtualMachine.Name, zoneValue, regionValue)
+		return true, nil
+	}
+	return false, nil
 }

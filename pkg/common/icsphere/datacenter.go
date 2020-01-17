@@ -25,6 +25,7 @@ import (
 	"github.com/inspur-ics/ics-go-sdk/client/types"
 	icsdc "github.com/inspur-ics/ics-go-sdk/datacenter"
 	"k8s.io/klog"
+	"strconv"
 )
 
 // DatastoreInfoProperty refers to the property name info for the Datastore
@@ -32,6 +33,7 @@ const DatastoreInfoProperty = "info"
 
 // Datacenter holds virtual center information along with the Datacenter.
 type Datacenter struct {
+	ID string
 	*types.Datacenter
 	Client *client.Client
 	// VirtualCenterHost represents the virtual center host ip address.
@@ -41,7 +43,7 @@ type Datacenter struct {
 
 func (dc *Datacenter) String() string {
 	return fmt.Sprintf("Datacenter [ID: %s Name: %s VCenter: %s]",
-		dc.Datacenter.ID, dc.Datacenter.Name, dc.VirtualCenterHost)
+		dc.ID, dc.Datacenter.Name, dc.VirtualCenterHost)
 }
 
 func (dc *Datacenter) Connect(ctx context.Context) error {
@@ -50,7 +52,7 @@ func (dc *Datacenter) Connect(ctx context.Context) error {
 		Username: vcCfg.Username,
 		Password: vcCfg.Password,
 		Hostname: vcCfg.Host,
-		Port:     vcCfg.Port,
+		Port:     strconv.Itoa(vcCfg.Port),
 		Insecure: vcCfg.Insecure,
 	}
 

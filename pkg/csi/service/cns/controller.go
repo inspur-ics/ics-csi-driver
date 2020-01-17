@@ -28,6 +28,7 @@ import (
 
 	"ics-csi-driver/pkg/common/config"
 	ics "ics-csi-driver/pkg/common/icsphere"
+	"ics-csi-driver/pkg/common/rest"
 	"ics-csi-driver/pkg/csi/service/common"
 	csitypes "ics-csi-driver/pkg/csi/types"
 )
@@ -68,12 +69,11 @@ func (c *controller) Init(config *config.Config) error {
 		return err
 	}
 	vcManager := ics.GetVirtualCenterManager()
-	vcenter, err := vcManager.RegisterVirtualCenter(vcenterconfig)
+	vc, err := vcManager.RegisterVirtualCenter(vcenterconfig)
 	if err != nil {
 		klog.Errorf("Failed to register VC with virtualCenterManager. err=%v", err)
 		return err
 	}
-	klog.Infof("Successfully register VC %+v", vcenter)
 
 	c.manager = &common.Manager{
 		VcenterConfig:  vcenterconfig,
@@ -83,12 +83,19 @@ func (c *controller) Init(config *config.Config) error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	vc, err := common.GetVCenter(ctx, c.manager)
+	vc, err = common.GetVCenter(ctx, c.manager)
 	if err != nil {
 		klog.Errorf("Failed to get vcenter. err=%v", err)
 		return err
 	}
 	klog.Infof("Successfully get vcenter %+v", vc)
+
+	rest.DefaultRestCfg = rest.RestProxyCfg{
+		Addr: vcenterconfig.Host,
+		Port: vcenterconfig.Port,
+		User: vcenterconfig.Username,
+		Pass: vcenterconfig.Password,
+	}
 
 	c.nodeMgr = &Nodes{}
 	err = c.nodeMgr.Initialize()

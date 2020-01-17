@@ -22,7 +22,9 @@ import (
 	icsgo "github.com/inspur-ics/ics-go-sdk"
 	"github.com/inspur-ics/ics-go-sdk/client"
 	icsdc "github.com/inspur-ics/ics-go-sdk/datacenter"
+	"ics-csi-driver/pkg/common/rest"
 	"k8s.io/klog"
+	"strconv"
 	"sync"
 	//csictx "github.com/rexray/gocsi/context"
 	//cnsconfig "ics-csi-driver/pkg/common/config"
@@ -46,7 +48,7 @@ type VirtualCenterConfig struct {
 	// Host represents the virtual center host address.
 	Host string
 	// Port represents the virtual center host port.
-	Port string
+	Port int
 	// Username represents the virtual center username.
 	Username string
 	// Password represents the virtual center password in clear text.
@@ -73,7 +75,7 @@ func (vc *VirtualCenter) Connect(ctx context.Context) error {
 		Username: vc.Config.Username,
 		Password: vc.Config.Password,
 		Hostname: vc.Config.Host,
-		Port:     vc.Config.Port,
+		Port:     strconv.Itoa(vc.Config.Port),
 		Insecure: vc.Config.Insecure,
 	}
 
@@ -97,9 +99,25 @@ func (vc *VirtualCenter) GetDatacenters(ctx context.Context) ([]*Datacenter, err
 	} else {
 		klog.V(5).Infof("successfully get datacenter list for vc: %s\n", vc.Config.Host)
 		for _, dcItem := range dcList {
-			dc := &Datacenter{Datacenter: dcItem, VirtualCenterHost: vc.Config.Host, VCenter: vc}
+			dc := &Datacenter{ID: dcItem.ID, Datacenter: dcItem, VirtualCenterHost: vc.Config.Host, VCenter: vc}
 			dcs = append(dcs, dc)
 		}
 	}
 	return dcs, err
+}
+
+func (vc *VirtualCenter) GetTopologys(ctx context.Context) ([]rest.DataCenterTopology, error) {
+	rp, err := rest.NewRestProxy()
+	if err != nil {
+		klog.Error("create restProxy failed.")
+		return nil, err
+	}
+
+	dcTopologys, err := rest.GetDataCenterTopology(rp)
+	if err != nil {
+		klog.Error("get datacenter topology failed.")
+		return nil, err
+	}
+
+	return dcTopologys, nil
 }

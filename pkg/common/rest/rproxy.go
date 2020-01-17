@@ -123,7 +123,7 @@ func (rp *RestProxy) Login() (int, []byte, error) {
 		klog.Error("LoginRsp json unmarshal failed.")
 	} else {
 		rp.sessionID = loginRsp.SessionId
-		klog.V(4).Infof("Login SessionID:%s  RSP:%+v\n", rp.sessionID, loginRsp)
+		//klog.V(4).Infof("Login SessionID:%s  RSP:%+v\n", rp.sessionID, loginRsp)
 	}
 
 	return res.StatusCode, bodyBytes, err
@@ -189,19 +189,12 @@ func (rp *RestProxy) Send(method, path string, data interface{}) (int, []byte, e
 
 type RestProxyCfg struct {
 	Addr string
-	//Port        int
-	//Prot        string
+	Port int
 	User string
 	Pass string
-	//IdleTimeOut string // See time Duration
-	//Tries       int
 }
 
-var icenterCfg = RestProxyCfg{
-	Addr: "10.7.11.90",
-	User: "admin",
-	Pass: "admin@inspur",
-}
+var DefaultRestCfg RestProxyCfg
 
 // TODO: implement sessions
 func NewRestProxy() (ri RestProxyInterface, err error) {
@@ -229,13 +222,13 @@ func NewRestProxy() (ri RestProxyInterface, err error) {
 	}
 
 	ri = &RestProxy{
-		addr:          icenterCfg.Addr,
-		port:          443,
+		addr:          DefaultRestCfg.Addr,
+		port:          DefaultRestCfg.Port,
 		httpRestProxy: httpRestProxy,
 		requestID:     0,
 		prot:          "https",
-		user:          icenterCfg.User,
-		pass:          icenterCfg.Pass,
+		user:          DefaultRestCfg.User,
+		pass:          DefaultRestCfg.Pass,
 		tries:         3,
 	}
 
