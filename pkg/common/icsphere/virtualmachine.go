@@ -55,8 +55,12 @@ func (vm *VirtualMachine) String() string {
 
 // GetAllAccessibleDatastores gets the list of accessible Datastores for the given Virtual Machine
 func (vm *VirtualMachine) GetAllAccessibleDatastores(ctx context.Context) ([]*DatastoreInfo, error) {
-	var dsObjList []*DatastoreInfo
-	return dsObjList, nil
+	hostId := vm.VirtualMachine.HostID
+	host := Host{
+		ID:                hostId,
+		VirtualCenterHost: vm.VirtualCenterHost,
+	}
+	return host.GetAllAccessibleDatastores(ctx)
 }
 
 // renew renews the virtual machine and datacenter objects given its virtual center.

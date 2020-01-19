@@ -69,7 +69,6 @@ func (vcc *VirtualCenterConfig) String() string {
 
 // connect creates a connection to the virtual center host.
 func (vc *VirtualCenter) Connect(ctx context.Context) error {
-
 	conn := &icsgo.ICSConnection{
 		Username: vc.Config.Username,
 		Password: vc.Config.Password,
@@ -98,7 +97,7 @@ func (vc *VirtualCenter) GetDatacenters(ctx context.Context) ([]*Datacenter, err
 	} else {
 		klog.V(5).Infof("successfully get datacenter list for vc: %s\n", vc.Config.Host)
 		for _, dcItem := range dcList {
-			dc := &Datacenter{ID: dcItem.ID, Datacenter: dcItem, VirtualCenterHost: vc.Config.Host, VCenter: vc}
+			dc := &Datacenter{ID: dcItem.ID, Datacenter: dcItem, VirtualCenterHost: vc.Config.Host}
 			dcs = append(dcs, dc)
 		}
 	}

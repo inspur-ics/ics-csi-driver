@@ -161,26 +161,24 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 		}
 		klog.V(4).Infof("Shared datastores [%+v] retrieved for topologyRequirement [%+v] with datastoreTopologyMap [+%v]", sharedDatastores, topologyRequirement, datastoreTopologyMap)
 		if createVolumeSpec.DatastoreID != "" {
-			// Check datastoreURL specified in the storageclass is accessible from topology
+			// Check datastore ID specified in the storageclass is accessible from topology
 			isDataStoreAccessible := false
 			for _, sharedDatastore := range sharedDatastores {
-				_ = sharedDatastore
-				//if sharedDatastore.Info.ID == createVolumeSpec.DatastoreID {
-				//	isDataStoreAccessible = true
-				break
-				//}
+				if sharedDatastore.ID == createVolumeSpec.DatastoreID {
+					isDataStoreAccessible = true
+					break
+				}
 			}
 			if !isDataStoreAccessible {
-				errMsg := fmt.Sprintf("DatastoreURL: %s specified in the storage class is not accessible in the topology:[+%v]",
+				errMsg := fmt.Sprintf("DatastoreID: %s specified in the storage class is not accessible in the topology:[+%v]",
 					createVolumeSpec.DatastoreID, topologyRequirement)
 				klog.Errorf(errMsg)
 				return nil, status.Error(codes.InvalidArgument, errMsg)
 			}
+		} else {
+			createVolumeSpec.DatastoreID = sharedDatastores[0].ID
 		}
 
-		msg := fmt.Sprintf("Failed to create volume. Error: Topology Not Support %+v", topologyRequirement)
-		klog.Error(msg)
-		return nil, status.Errorf(codes.Internal, msg)
 	}
 
 	volumeID, err := common.CreateVolumeUtil(ctx, &createVolumeSpec)

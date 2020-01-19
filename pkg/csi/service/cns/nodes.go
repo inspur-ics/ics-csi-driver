@@ -155,7 +155,7 @@ func (nodes *Nodes) GetSharedDatastoresInTopology(ctx context.Context, topologyR
 				klog.Errorf("Failed to get shared datastores for nodes: %+v in zone [%s] and region [%s]. Error: %+v", nodeVMsInZoneRegion, zone, region, err)
 				return nil, nil, err
 			}
-			klog.V(4).Infof("Obtained shared datastores : %+v for topology: %+v", sharedDatastores, topology)
+			klog.V(4).Infof("Obtained shared datastores : %+v for topology: %+v", sharedDatastoresInZoneRegion, topology)
 			for _, datastore := range sharedDatastoresInZoneRegion {
 				accessibleTopology := make(map[string]string)
 				if zone != "" {
@@ -164,7 +164,7 @@ func (nodes *Nodes) GetSharedDatastoresInTopology(ctx context.Context, topologyR
 				if region != "" {
 					accessibleTopology[csitypes.LabelRegionFailureDomain] = region
 				}
-				datastoreTopologyMap[datastore.Url] = append(datastoreTopologyMap[datastore.Url], accessibleTopology)
+				datastoreTopologyMap[datastore.ID] = append(datastoreTopologyMap[datastore.ID], accessibleTopology)
 			}
 			sharedDatastores = append(sharedDatastores, sharedDatastoresInZoneRegion...)
 		}
@@ -232,8 +232,8 @@ func (nodes *Nodes) GetSharedDatastoresForVMs(ctx context.Context, nodeVMs []*ic
 			for _, sharedDs := range sharedDatastores {
 				// Check if sharedDatastores is found in accessibleDatastores
 				for _, accessibleDs := range accessibleDatastores {
-					// Intersection is performed based on the datastoreUrl as this uniquely identifies the datastore.
-					if sharedDs.Url == accessibleDs.Url {
+					// Intersection is performed based on the datastoreID as this uniquely identifies the datastore.
+					if sharedDs.ID == accessibleDs.ID {
 						sharedAccessibleDatastores = append(sharedAccessibleDatastores, sharedDs)
 						break
 					}
