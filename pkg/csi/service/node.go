@@ -20,20 +20,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/akutz/gofsutil"
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	csictx "github.com/rexray/gocsi/context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"ics-csi-driver/pkg/common/config"
+	"ics-csi-driver/pkg/common/icsphere"
+	"ics-csi-driver/pkg/common/rest"
+	"ics-csi-driver/pkg/csi/service/common"
+	csitypes "ics-csi-driver/pkg/csi/types"
 	"io/ioutil"
+	"k8s.io/klog"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
-
-	"github.com/akutz/gofsutil"
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"ics-csi-driver/pkg/csi/service/common"
-	"k8s.io/klog"
-	//csictx "github.com/rexray/gocsi/context"
-	//csitypes "ics-csi-driver/pkg/csi/types"
 )
 
 const (
@@ -367,7 +369,75 @@ func (s *service) NodeGetInfo(
 		return nil, status.Error(codes.Internal, "ENV NODE_NAME is not set")
 	}
 
+	var cfg *config.Config
+	cfgPath = csictx.Getenv(ctx, config.EnvCloudConfig)
+	if cfgPath == "" {
+		cfgPath = config.DefaultCloudConfigPath
+	}
+	cfg, err := config.GetCnsconfig(cfgPath)
+	if err != nil {
+		klog.Errorf("Failed to read cnsconfig. Error: %v", err)
+		return nil, status.Errorf(codes.Internal, err.Error())
+	}
+
+	var accessibleTopology map[string]string
 	topology := &csi.Topology{}
+
+	if cfg.Labels.Zone != "" && cfg.Labels.Region != "" {
+		vcenterconfig, err := icsphere.GetVirtualCenterConfig(cfg)
+		if err != nil {
+			klog.Errorf("Failed to get VirtualCenterConfig from ics config. err=%v", err)
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
+		vcManager := icsphere.GetVirtualCenterManager()
+		vcenter, err := vcManager.RegisterVirtualCenter(vcenterconfig)
+		if err != nil {
+			klog.Errorf("Failed to register vcenter with virtualCenterManager.")
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
+		defer vcManager.UnregisterAllVirtualCenters()
+		err = vcenter.Connect(ctx)
+		if err != nil {
+			klog.Errorf("Failed to connect to vcenter host: %s. err=%v", vcenter.Config.Host, err)
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
+
+		rest.DefaultRestCfg = rest.RestProxyCfg{
+			Addr: vcenterconfig.Host,
+			Port: vcenterconfig.Port,
+			User: vcenterconfig.Username,
+			Pass: vcenterconfig.Password,
+		}
+
+		uuid, err := getSystemUUID()
+		if err != nil {
+			klog.Errorf("Failed to get system uuid for node VM")
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
+		klog.V(4).Infof("Successfully retrieved uuid:%s  from the node: %s", uuid, nodeID)
+		nodeVM, err := icsphere.GetVirtualMachineByNameOrUUID(nodeID, "", false)
+		if err != nil || nodeVM == nil {
+			klog.Errorf("Failed to get nodeVM for uuid: %s name: %s. err: %+v", nodeID, uuid, err)
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
+
+		zone, region, err := nodeVM.GetZoneRegion(ctx, cfg.Labels.Zone, cfg.Labels.Region)
+		if err != nil {
+			klog.Errorf("Failed to get accessibleTopology for vm: %+v, err: %v", nodeVM, err)
+			return nil, status.Errorf(codes.Internal, err.Error())
+		}
+		klog.V(4).Infof("zone: [%s], region: [%s], Node VM: [%s]", zone, region, nodeID)
+		if zone != "" && region != "" {
+			accessibleTopology = make(map[string]string)
+			accessibleTopology[csitypes.LabelRegionFailureDomain] = region
+			accessibleTopology[csitypes.LabelZoneFailureDomain] = zone
+		}
+	}
+
+	if len(accessibleTopology) > 0 {
+		topology.Segments = accessibleTopology
+	}
+
 	return &csi.NodeGetInfoResponse{
 		NodeId:             nodeID,
 		AccessibleTopology: topology,
@@ -723,7 +793,6 @@ func getSystemUUID() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	klog.V(4).Infof("uuid in bytes: %v", idb)
 	id := strings.TrimSpace(string(idb))
 	klog.V(4).Infof("uuid in string: %s", id)
 	return strings.ToLower(id), nil

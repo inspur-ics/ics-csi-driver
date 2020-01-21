@@ -19,12 +19,13 @@ package cns
 import (
 	"context"
 	"fmt"
-	"strings"
-
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog"
+	"math/rand"
+	"strings"
+	"time"
 
 	"ics-csi-driver/pkg/common/config"
 	ics "ics-csi-driver/pkg/common/icsphere"
@@ -160,25 +161,43 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 			return nil, status.Error(codes.NotFound, msg)
 		}
 		klog.V(4).Infof("Shared datastores [%+v] retrieved for topologyRequirement [%+v] with datastoreTopologyMap [+%v]", sharedDatastores, topologyRequirement, datastoreTopologyMap)
-		if createVolumeSpec.DatastoreID != "" {
-			// Check datastore ID specified in the storageclass is accessible from topology
-			isDataStoreAccessible := false
-			for _, sharedDatastore := range sharedDatastores {
-				if sharedDatastore.ID == createVolumeSpec.DatastoreID {
-					isDataStoreAccessible = true
-					break
-				}
-			}
-			if !isDataStoreAccessible {
-				errMsg := fmt.Sprintf("DatastoreID: %s specified in the storage class is not accessible in the topology:[+%v]",
-					createVolumeSpec.DatastoreID, topologyRequirement)
-				klog.Errorf(errMsg)
-				return nil, status.Error(codes.InvalidArgument, errMsg)
-			}
-		} else {
-			createVolumeSpec.DatastoreID = sharedDatastores[0].ID
+	} else {
+		// Get shared datastores for the Kubernetes cluster
+		sharedDatastores, err = c.nodeMgr.GetSharedDatastoresInK8SCluster(ctx)
+		if err != nil || len(sharedDatastores) == 0 {
+			msg := fmt.Sprintf("Failed to get shared datastores in kubernetes cluster. Error: %+v", err)
+			klog.Error(msg)
+			return nil, status.Errorf(codes.Internal, msg)
 		}
+	}
 
+	if createVolumeSpec.DatastoreID != "" {
+		// Check datastore ID specified in the storageclass is accessible
+		isDataStoreAccessible := false
+		for _, sharedDatastore := range sharedDatastores {
+			if sharedDatastore.ID == createVolumeSpec.DatastoreID {
+				isDataStoreAccessible = true
+				break
+			}
+		}
+		if !isDataStoreAccessible {
+			var errMsg string
+			if topologyRequirement != nil {
+				errMsg = fmt.Sprintf("DatastoreID: %s specified in the storage class is not accessible in the topology:[+%v]",
+					createVolumeSpec.DatastoreID, topologyRequirement)
+			} else {
+				errMsg = fmt.Sprintf("DatastoreID: %s specified in the storage class is not accessible", createVolumeSpec.DatastoreID)
+			}
+			klog.Errorf(errMsg)
+			return nil, status.Error(codes.InvalidArgument, errMsg)
+		}
+	} else if topologyRequirement != nil {
+		rand.Seed(time.Now().Unix())
+		createVolumeSpec.DatastoreID = sharedDatastores[rand.Intn(len(sharedDatastores))].ID
+	} else {
+		errMsg := fmt.Sprintf("DatastoreID not specified in the storage class. CreateVolumeRequest: %+v", *req)
+		klog.Errorf(errMsg)
+		return nil, status.Error(codes.InvalidArgument, errMsg)
 	}
 
 	volumeID, err := common.CreateVolumeUtil(ctx, &createVolumeSpec)
@@ -198,6 +217,12 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 		},
 	}
 
+	if topologyRequirement != nil {
+		volumeTopology := &csi.Topology{
+			Segments: datastoreTopologyMap[createVolumeSpec.DatastoreID][0],
+		}
+		resp.Volume.AccessibleTopology = append(resp.Volume.AccessibleTopology, volumeTopology)
+	}
 	return resp, nil
 }
 
