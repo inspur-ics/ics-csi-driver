@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"github.com/akutz/gofsutil"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	csipbv1 "github.com/container-storage-interface/spec/lib/go/csi"
 	csictx "github.com/rexray/gocsi/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -31,7 +32,11 @@ import (
 	"ics-csi-driver/pkg/csi/service/common"
 	csitypes "ics-csi-driver/pkg/csi/types"
 	"io/ioutil"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
+	k8svol "k8s.io/kubernetes/pkg/volume"
+	"k8s.io/kubernetes/pkg/volume/util/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -334,7 +339,98 @@ func (s *service) NodeGetVolumeStats(
 	*csi.NodeGetVolumeStatsResponse, error) {
 
 	klog.V(5).Infof("NodeGetVolumeStats: called with args %+v", *req)
-	return nil, nil
+
+	var err error
+	targetPath := req.GetVolumePath()
+	if targetPath == "" {
+		err = fmt.Errorf("targetpath %v is empty", targetPath)
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	dev, err := getDevFromMount(targetPath)
+	if err != nil {
+		err = fmt.Errorf("unable to get targetpath %v device", targetPath)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	if dev == nil {
+		err = fmt.Errorf("could not find device mounted on targetpath %v", targetPath)
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	volMetrics, err := getMetrics(targetPath)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	klog.V(5).Infof("NodeGetVolumeStats: targetPath %v dev %v volMetrics %+v", targetPath, dev, volMetrics)
+
+	available, ok := (*(volMetrics.Available)).AsInt64()
+	if !ok {
+		klog.Errorf("failed to fetch available bytes")
+	}
+	capacity, ok := (*(volMetrics.Capacity)).AsInt64()
+	if !ok {
+		klog.Errorf("failed to fetch capacity bytes")
+		return nil, status.Error(codes.Unknown, "failed to fetch capacity bytes")
+	}
+	used, ok := (*(volMetrics.Used)).AsInt64()
+	if !ok {
+		klog.Errorf("failed to fetch used bytes")
+	}
+	inodes, ok := (*(volMetrics.Inodes)).AsInt64()
+	if !ok {
+		klog.Errorf("failed to fetch available inodes")
+		return nil, status.Error(codes.Unknown, "failed to fetch available inodes")
+	}
+	inodesFree, ok := (*(volMetrics.InodesFree)).AsInt64()
+	if !ok {
+		klog.Errorf("failed to fetch free inodes")
+	}
+	inodesUsed, ok := (*(volMetrics.InodesUsed)).AsInt64()
+	if !ok {
+		klog.Errorf("failed to fetch used inodes")
+	}
+
+	return &csi.NodeGetVolumeStatsResponse{
+		Usage: []*csi.VolumeUsage{
+			{
+				Available: available,
+				Total:     capacity,
+				Used:      used,
+				Unit:      csipbv1.VolumeUsage_BYTES,
+			},
+			{
+				Available: inodesFree,
+				Total:     inodes,
+				Used:      inodesUsed,
+				Unit:      csipbv1.VolumeUsage_INODES,
+			},
+		},
+	}, nil
+}
+
+//Get volume metrics using k8s fsInfo strategy
+func getMetrics(path string) (*k8svol.Metrics, error) {
+	if path == "" {
+		return nil, fmt.Errorf("No path given")
+	}
+
+	available, capacity, usage, inodes, inodesFree, inodesUsed, err := fs.FsInfo(path)
+	metrics := &k8svol.Metrics{Time: metav1.Now()}
+	if err != nil {
+		return nil, err
+	}
+	metrics.Available = resource.NewQuantity(available, resource.BinarySI)
+	metrics.Capacity = resource.NewQuantity(capacity, resource.BinarySI)
+	metrics.Used = resource.NewQuantity(usage, resource.BinarySI)
+	metrics.Inodes = resource.NewQuantity(inodes, resource.BinarySI)
+	metrics.InodesFree = resource.NewQuantity(inodesFree, resource.BinarySI)
+	metrics.InodesUsed = resource.NewQuantity(inodesUsed, resource.BinarySI)
+	if err != nil {
+		return metrics, err
+	}
+
+	return metrics, nil
 }
 
 func (s *service) NodeGetCapabilities(
@@ -350,6 +446,13 @@ func (s *service) NodeGetCapabilities(
 				Type: &csi.NodeServiceCapability_Rpc{
 					Rpc: &csi.NodeServiceCapability_RPC{
 						Type: csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
+					},
+				},
+			},
+			{
+				Type: &csi.NodeServiceCapability_Rpc{
+					Rpc: &csi.NodeServiceCapability_RPC{
+						Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
 					},
 				},
 			},
