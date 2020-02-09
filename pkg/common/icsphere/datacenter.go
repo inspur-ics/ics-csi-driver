@@ -45,11 +45,7 @@ func (dc *Datacenter) String() string {
 		dc.ID, dc.Datacenter.Name, dc.VirtualCenterHost)
 }
 
-func (dc *Datacenter) GetVirtualMachineByUUID(ctx context.Context, uuid string, instanceUUID bool) (*VirtualMachine, error) {
-	return nil, nil
-}
-
-func (dc *Datacenter) GetVirtualMachineByName(ctx context.Context, name string) (*VirtualMachine, error) {
+func (dc *Datacenter) GetVirtualMachineByNameOrUUID(ctx context.Context, name string, uuid string, instanceUUID bool) (*VirtualMachine, error) {
 	vc, err := GetVirtualCenterManager().GetVirtualCenter(dc.VirtualCenterHost)
 	if err != nil {
 		klog.Errorf("Failed to get VC for datacenter %v with err: %v", dc, err)
@@ -66,7 +62,7 @@ func (dc *Datacenter) GetVirtualMachineByName(ctx context.Context, name string) 
 		return nil, err
 	}
 	for _, vmItem := range vmList {
-		if vmItem.Name == name || vmItem.Description == name {
+		if vmItem.UUID == uuid || vmItem.Name == name || vmItem.Description == name {
 			vm := VirtualMachine{
 				VirtualCenterHost: dc.VirtualCenterHost,
 				UUID:              vmItem.UUID,

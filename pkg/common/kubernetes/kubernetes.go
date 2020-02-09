@@ -17,13 +17,13 @@ limitations under the License.
 package kubernetes
 
 import (
-	"k8s.io/klog"
-
 	"ics-csi-driver/pkg/csi/service/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog"
+	"strings"
 )
 
 // NewClient creates a newk8s client based on a service account
@@ -58,13 +58,21 @@ func CreateKubernetesClientFromConfig(kubeConfigPath string) (clientset.Interfac
 
 // GetNodeVMUUID returns VM UUID set by CCM on the Kubernetes Node
 func GetNodeVMUUID(k8sclient clientset.Interface, nodeName string) (string, error) {
+	var k8sNodeUUID string
 	klog.V(2).Infof("GetNodeVMUUID called for the node: %q", nodeName)
 	node, err := k8sclient.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 	if err != nil {
 		klog.Errorf("Failed to get kubernetes node with the name: %q. Err: %v", nodeName, err)
 		return "", err
 	}
-	k8sNodeUUID := common.GetUUIDFromProviderID(node.Spec.ProviderID)
+
+	if node.Spec.ProviderID == "" {
+		klog.Warningf("node %v ProviderID is empty", nodeName)
+		k8sNodeUUID = strings.ToLower(node.Status.NodeInfo.SystemUUID)
+	} else {
+		k8sNodeUUID = common.GetUUIDFromProviderID(node.Spec.ProviderID)
+	}
+
 	klog.V(2).Infof("Retrieved node UUID: %q for the node: %q", k8sNodeUUID, nodeName)
 	return k8sNodeUUID, nil
 }

@@ -1,7 +1,6 @@
 #!/bin/sh
 
-#provider_prefix="InCloud-Sphere://"
-provider_prefix="vsphere://"
+provider_prefix="ics://"
 product_uuid=$(cat /sys/class/dmi/id/product_uuid)
 nodename=$(kubectl get node --no-headers | awk '{print $1}' | grep $(hostname))
 

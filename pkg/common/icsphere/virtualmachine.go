@@ -148,11 +148,7 @@ func GetVirtualMachineByNameOrUUID(name string, uuid string, instanceUUID bool) 
 
 					// Found some Datacenter object.
 					klog.V(2).Infof("AsyncGetAllDatacenters with name %s uuid %s sent a dc %v", name, uuid, dc)
-					if uuid != "" {
-						vm, err = dc.GetVirtualMachineByUUID(context.Background(), uuid, instanceUUID)
-					} else {
-						vm, err = dc.GetVirtualMachineByName(context.Background(), name)
-					}
+					vm, err = dc.GetVirtualMachineByNameOrUUID(context.Background(), name, uuid, instanceUUID)
 
 					if err != nil {
 						if err == ErrVMNotFound {

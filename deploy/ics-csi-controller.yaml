@@ -114,4 +114,4 @@ metadata:
   name: csi.icsphere.inspur.com
 spec:
   attachRequired: true
-  podInfoOnMount: false
+  podInfoOnMount: true

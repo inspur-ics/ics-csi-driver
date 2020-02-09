@@ -50,11 +50,11 @@ var (
 
 	// ErrInvalidVCenterIP is returned when the provided vCenter IP address is
 	// missing from the provided configuration.
-	ErrInvalidVCenterIP = errors.New("vsphere.conf does not have the VirtualCenter IP address specified")
+	ErrInvalidVCenterIP = errors.New("icsphere-csi.conf does not have the iCenter IP address specified")
 
 	// ErrMissingVCenter is returned when the provided configuration does not
 	// define any vCenters.
-	ErrMissingVCenter = errors.New("No Virtual Center hosts defined")
+	ErrMissingVCenter = errors.New("No iCenter hosts defined")
 )
 
 func getEnvKeyValue(match string, partial bool) (string, string, error) {
@@ -98,33 +98,33 @@ func FromEnv(cfg *Config) error {
 	}
 
 	//Globals
-	if v := os.Getenv("VSPHERE_VCENTER"); v != "" {
+	if v := os.Getenv("ICS_ICENTER"); v != "" {
 		cfg.Global.VCenterIP = v
 	}
-	if v := os.Getenv("VSPHERE_VCENTER_PORT"); v != "" {
+	if v := os.Getenv("ICS_ICENTER_PORT"); v != "" {
 		cfg.Global.VCenterPort = v
 	}
-	if v := os.Getenv("VSPHERE_USER"); v != "" {
+	if v := os.Getenv("ICS_USER"); v != "" {
 		cfg.Global.User = v
 	}
-	if v := os.Getenv("VSPHERE_PASSWORD"); v != "" {
+	if v := os.Getenv("ICS_PASSWORD"); v != "" {
 		cfg.Global.Password = v
 	}
-	if v := os.Getenv("VSPHERE_DATACENTER"); v != "" {
+	if v := os.Getenv("ICS_DATACENTER"); v != "" {
 		cfg.Global.Datacenters = v
 	}
-	if v := os.Getenv("VSPHERE_INSECURE"); v != "" {
+	if v := os.Getenv("ICS_INSECURE"); v != "" {
 		InsecureFlag, err := strconv.ParseBool(v)
 		if err != nil {
-			klog.Errorf("Failed to parse VSPHERE_INSECURE: %s", err)
+			klog.Errorf("Failed to parse ICS_INSECURE: %s", err)
 		} else {
 			cfg.Global.InsecureFlag = InsecureFlag
 		}
 	}
-	if v := os.Getenv("VSPHERE_LABEL_REGION"); v != "" {
+	if v := os.Getenv("ICS_LABEL_REGION"); v != "" {
 		cfg.Labels.Region = v
 	}
-	if v := os.Getenv("VSPHERE_LABEL_ZONE"); v != "" {
+	if v := os.Getenv("ICS_LABEL_ZONE"); v != "" {
 		cfg.Labels.Zone = v
 	}
 	//Build VirtualCenter from ENVs
@@ -138,31 +138,31 @@ func FromEnv(cfg *Config) error {
 		key := pair[0]
 		value := pair[1]
 
-		if strings.HasPrefix(key, "VSPHERE_VCENTER_") && len(value) > 0 {
-			id := strings.TrimPrefix(key, "VSPHERE_VCENTER_")
+		if strings.HasPrefix(key, "ICS_ICENTER_") && len(value) > 0 {
+			id := strings.TrimPrefix(key, "ICS_ICENTER_")
 			vcenter := value
 
-			_, username, errUsername := getEnvKeyValue("VCENTER_"+id+"_USERNAME", false)
+			_, username, errUsername := getEnvKeyValue("ICENTER_"+id+"_USERNAME", false)
 			if errUsername != nil {
 				username = cfg.Global.User
 			}
-			_, password, errPassword := getEnvKeyValue("VCENTER_"+id+"_PASSWORD", false)
+			_, password, errPassword := getEnvKeyValue("ICENTER_"+id+"_PASSWORD", false)
 			if errPassword != nil {
 				password = cfg.Global.Password
 			}
-			_, port, errPort := getEnvKeyValue("VCENTER_"+id+"_PORT", false)
+			_, port, errPort := getEnvKeyValue("ICENTER_"+id+"_PORT", false)
 			if errPort != nil {
 				port = cfg.Global.VCenterPort
 			}
 			insecureFlag := false
-			_, insecureTmp, errInsecure := getEnvKeyValue("VCENTER_"+id+"_INSECURE", false)
+			_, insecureTmp, errInsecure := getEnvKeyValue("ICENTER_"+id+"_INSECURE", false)
 			if errInsecure != nil {
 				insecureFlagTmp, errTmp := strconv.ParseBool(insecureTmp)
 				if errTmp == nil {
 					insecureFlag = insecureFlagTmp
 				}
 			}
-			_, datacenters, errDatacenters := getEnvKeyValue("VCENTER_"+id+"_DATACENTERS", false)
+			_, datacenters, errDatacenters := getEnvKeyValue("ICENTER_"+id+"_DATACENTERS", false)
 			if errDatacenters != nil {
 				datacenters = cfg.Global.Datacenters
 			}
@@ -243,7 +243,7 @@ func validateConfig(cfg *Config) error {
 // Environment variables are also checked
 func ReadConfig(config io.Reader) (*Config, error) {
 	if config == nil {
-		return nil, fmt.Errorf("no vSphere cloud provider config file given")
+		return nil, fmt.Errorf("no csi config file given")
 	}
 	cfg := &Config{}
 	if err := gcfg.FatalOnly(gcfg.ReadInto(cfg, config)); err != nil {
@@ -260,7 +260,6 @@ func ReadConfig(config io.Reader) (*Config, error) {
 func GetCnsconfig(cfgPath string) (*Config, error) {
 	klog.V(4).Infof("GetCnsconfig called with cfgPath: %s", cfgPath)
 	var cfg *Config
-	//Read in the vsphere.conf if it exists
 	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
 		klog.V(2).Infof("Could not stat %s, reading config params from env", cfgPath)
 		// config from Env var only

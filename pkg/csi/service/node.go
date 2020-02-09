@@ -518,9 +518,9 @@ func (s *service) NodeGetInfo(
 			return nil, status.Errorf(codes.Internal, err.Error())
 		}
 		klog.V(4).Infof("Successfully retrieved uuid:%s  from the node: %s", uuid, nodeID)
-		nodeVM, err := icsphere.GetVirtualMachineByNameOrUUID(nodeID, "", false)
+		nodeVM, err := icsphere.GetVirtualMachineByNameOrUUID(nodeID, uuid, false)
 		if err != nil || nodeVM == nil {
-			klog.Errorf("Failed to get nodeVM for uuid: %s name: %s. err: %+v", nodeID, uuid, err)
+			klog.Errorf("Failed to get nodeVM for uuid: %s name: %s. err: %+v", uuid, nodeID, err)
 			return nil, status.Errorf(codes.Internal, err.Error())
 		}
 

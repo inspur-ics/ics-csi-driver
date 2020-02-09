@@ -53,8 +53,8 @@ const (
 	DefaultFsType = "ext4"
 
 	//ProviderPrefix is the prefix used for the ProviderID set on the node
-	// Example: vsphere://4201794a-f26b-8914-d95a-edeb7ecc4a8f
-	ProviderPrefix = "vsphere://"
+	// Example: ics://4201794a-f26b-8914-d95a-edeb7ecc4a8f
+	ProviderPrefix = "ics://"
 
 	// AttributeFirstClassDiskUUID is the SCSI Disk Identifier
 	AttributeFirstClassDiskUUID = "diskUUID"

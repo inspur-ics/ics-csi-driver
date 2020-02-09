@@ -112,19 +112,21 @@ func (m *nodeManager) RegisterNode(nodeUUID string, nodeName string) error {
 // DiscoverNodeByName discovers a registered node given its Name from vCenter.
 // If node is not found in the vCenter for the given Name, for ErrVMNotFound is returned to the caller
 func (m *nodeManager) DiscoverNodeByName(nodeName string) error {
-	vm, err := ics.GetVirtualMachineByNameOrUUID(nodeName, "", false)
+	nodeUUID, found := m.nodeNameToUUID.Load(nodeName)
+	if !found {
+		klog.Errorf("Node UUID not found with nodeName %s", nodeName)
+		return ErrNodeNotFound
+	}
+
+	uuid := nodeUUID.(string)
+	vm, err := ics.GetVirtualMachineByNameOrUUID(nodeName, uuid, false)
 	if err != nil {
-		klog.Errorf("Couldn't find VM instance with nodeUUID %s, failed to discover with err: %v", nodeName, err)
+		klog.Errorf("Couldn't find VM instance with nodeName %s, failed to discover with err: %v", nodeName, err)
 		return err
 	}
 
-	nodeUUID, found := m.nodeNameToUUID.Load(nodeName)
-	if !found {
-		klog.Errorf("Node not found with nodeName %s", nodeName)
-		return ErrNodeNotFound
-	}
-	m.nodeVMs.Store(nodeUUID, vm)
-	klog.V(2).Infof("Successfully discovered node with nodeUUID %s in vm %v", nodeUUID, vm)
+	m.nodeVMs.Store(uuid, vm)
+	klog.V(2).Infof("Successfully discovered node with nodeName %s in vm %v", nodeName, vm)
 	return nil
 }
 

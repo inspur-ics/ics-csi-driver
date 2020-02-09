@@ -19,10 +19,10 @@ package cns
 import (
 	"context"
 	"fmt"
-
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog"
+	"strings"
 
 	ics "ics-csi-driver/pkg/common/icsphere"
 	k8s "ics-csi-driver/pkg/common/kubernetes"
@@ -54,12 +54,21 @@ func (nodes *Nodes) Initialize() error {
 }
 
 func (nodes *Nodes) nodeAdd(obj interface{}) {
+	var uuid string
 	node, ok := obj.(*v1.Node)
 	if node == nil || !ok {
 		klog.Warningf("nodeAdd: unrecognized object %+v", obj)
 		return
 	}
-	err := nodes.cnsNodeManager.RegisterNode(common.GetUUIDFromProviderID(node.Spec.ProviderID), node.Name)
+
+	if node.Spec.ProviderID == "" {
+		klog.Warningf("node %v ProviderID is empty", node.Name)
+		uuid = strings.ToLower(node.Status.NodeInfo.SystemUUID)
+	} else {
+		uuid = common.GetUUIDFromProviderID(node.Spec.ProviderID)
+	}
+
+	err := nodes.cnsNodeManager.RegisterNode(uuid, node.Name)
 	if err != nil {
 		klog.Warningf("Failed to register node:%q. err=%v", node.Name, err)
 	}
