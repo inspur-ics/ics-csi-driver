@@ -46,6 +46,7 @@ type nodeManager interface {
 	Initialize() error
 	GetSharedDatastoresInK8SCluster(ctx context.Context) ([]*ics.DatastoreInfo, error)
 	GetSharedDatastoresInTopology(ctx context.Context, topologyRequirement *csi.TopologyRequirement, zoneKey string, regionKey string) ([]*ics.DatastoreInfo, map[string][]map[string]string, error)
+	GetNodeUUID(nodeName string) (string, error)
 	GetNodeByName(nodeName string) (*ics.VirtualMachine, error)
 }
 
@@ -251,10 +252,16 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 // volume id and node name is retrieved from ControllerPublishVolumeRequest
 func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.ControllerPublishVolumeRequest) (
 	*csi.ControllerPublishVolumeResponse, error) {
-
 	klog.V(4).Infof("ControllerPublishVolume: called with args %+v", *req)
 
-	scsiId, err := common.AttachVolumeUtil(ctx, req.NodeId, req.VolumeId)
+	nodeUUID, err := c.nodeMgr.GetNodeUUID(req.NodeId)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to find VirtualMachine for node:%q. Error: %v", req.NodeId, err)
+		klog.Error(msg)
+		return nil, status.Errorf(codes.Internal, msg)
+	}
+
+	scsiId, err := common.AttachVolumeUtil(ctx, nodeUUID, req.NodeId, req.VolumeId)
 	if err != nil {
 		klog.Errorf("ControllerPublishVolume: failed with err %v", err)
 	}

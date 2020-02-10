@@ -53,7 +53,7 @@ func CreateVolumeUtil(ctx context.Context, spec *CreateVolumeSpec) (string, erro
 	}
 }
 
-func AttachVolumeUtil(ctx context.Context, nodeId string, volumeId string) (string, error) {
+func AttachVolumeUtil(ctx context.Context, vmUuid string, vmName string, volumeId string) (string, error) {
 	scsiId, vmId := "", ""
 	rp, err := rest.NewRestProxy()
 	if err != nil {
@@ -61,7 +61,7 @@ func AttachVolumeUtil(ctx context.Context, nodeId string, volumeId string) (stri
 		return scsiId, err
 	}
 
-	vmList, err := rest.GetVmList(rp, nodeId)
+	vmList, err := rest.GetVmList(rp)
 	if err != nil {
 		klog.Error("get vm list failed.")
 		return scsiId, err
@@ -69,18 +69,18 @@ func AttachVolumeUtil(ctx context.Context, nodeId string, volumeId string) (stri
 
 	if len(vmList) > 0 {
 		for _, vmInfo := range vmList {
-			if vmInfo.Name == nodeId || vmInfo.Description == nodeId {
+			if vmInfo.Uuid == vmUuid {
 				vmId = vmInfo.Id
-				klog.V(5).Infof("find vm %s id %s", nodeId, vmId)
+				klog.V(5).Infof("find vm %s %s with id %s", vmUuid, vmName, vmId)
 				break
 			}
 		}
 	}
 
 	if vmId == "" {
-		klog.Errorf("vm %s not found", nodeId)
+		klog.Errorf("vm %s %s not found", vmUuid, vmName)
 		return scsiId, status.Errorf(codes.Internal,
-			"vm %s not found", nodeId)
+			"vm %s %s not found", vmUuid, vmName)
 	}
 
 	vmInfo, err := rest.GetVmInfo(rp, vmId)
@@ -113,10 +113,10 @@ func AttachVolumeUtil(ctx context.Context, nodeId string, volumeId string) (stri
 		}
 	}
 	vmInfo.VncPasswd = "00000000"
-	klog.V(4).Infof("attaching volume %s to vm %s", volumeId, nodeId)
+	klog.V(4).Infof("attaching volume %s to vm %s %s", volumeId, vmUuid, vmName)
 	taskId, err := rest.SetVmInfo(rp, vmInfo)
 	if err != nil {
-		klog.Errorf("attach volume %s to vm %s failed.", volumeId, nodeId)
+		klog.Errorf("attach volume %s to vm %s %s failed.", volumeId, vmUuid, vmName)
 		return scsiId, err
 	}
 
@@ -128,8 +128,8 @@ func AttachVolumeUtil(ctx context.Context, nodeId string, volumeId string) (stri
 			"set vm info failed: taskId %s stat %s", taskId, taskStat)
 	}
 
-	klog.V(4).Infof("successfully attached disk %s to vm %s. scsi wwn: %s",
-		volumeId, nodeId, diskInfo.ScsiId)
+	klog.V(4).Infof("successfully attached disk %s to vm %s %s. scsi wwn: %s",
+		volumeId, vmUuid, vmName, diskInfo.ScsiId)
 	return diskInfo.ScsiId, nil
 }
 

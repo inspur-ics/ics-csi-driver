@@ -43,11 +43,12 @@ type Manager interface {
 	// DiscoverNode discovers a registered node given its UUID. This method
 	// scans all virtual centers registered on the VirtualCenterManager for a
 	// virtual machine with the given UUID.
-	DiscoverNode(nodeUUID string) error
-	DiscoverNodeByName(nodeName string) error
+	DiscoverNode(nodeUUID string, nodeName string) error
+	//GetNodeUUID return UUID for a node given its nodeName
+	GetNodeUUID(nodeName string) (string, error)
 	// GetNode refreshes and returns the VirtualMachine for a registered node
 	// given its UUID.
-	GetNode(nodeUUID string) (*ics.VirtualMachine, error)
+	GetNode(nodeUUID string, nodeName string) (*ics.VirtualMachine, error)
 	// GetNodeByName refreshes and returns the VirtualMachine for a registered node
 	// given its name.
 	GetNodeByName(nodeName string) (*ics.VirtualMachine, error)
@@ -100,7 +101,7 @@ func (m *nodeManager) SetKubernetesClient(client clientset.Interface) {
 func (m *nodeManager) RegisterNode(nodeUUID string, nodeName string) error {
 	m.nodeNameToUUID.Store(nodeName, nodeUUID)
 	klog.V(2).Infof("Successfully registered node: %q with nodeUUID %q", nodeName, nodeUUID)
-	err := m.DiscoverNodeByName(nodeName)
+	err := m.DiscoverNode(nodeUUID, nodeName)
 	if err != nil {
 		klog.Errorf("Failed to discover VM with uuid: %q for node: %q", nodeUUID, nodeName)
 		return err
@@ -109,31 +110,10 @@ func (m *nodeManager) RegisterNode(nodeUUID string, nodeName string) error {
 	return nil
 }
 
-// DiscoverNodeByName discovers a registered node given its Name from vCenter.
-// If node is not found in the vCenter for the given Name, for ErrVMNotFound is returned to the caller
-func (m *nodeManager) DiscoverNodeByName(nodeName string) error {
-	nodeUUID, found := m.nodeNameToUUID.Load(nodeName)
-	if !found {
-		klog.Errorf("Node UUID not found with nodeName %s", nodeName)
-		return ErrNodeNotFound
-	}
-
-	uuid := nodeUUID.(string)
-	vm, err := ics.GetVirtualMachineByNameOrUUID(nodeName, uuid, false)
-	if err != nil {
-		klog.Errorf("Couldn't find VM instance with nodeName %s, failed to discover with err: %v", nodeName, err)
-		return err
-	}
-
-	m.nodeVMs.Store(uuid, vm)
-	klog.V(2).Infof("Successfully discovered node with nodeName %s in vm %v", nodeName, vm)
-	return nil
-}
-
 // DiscoverNode discovers a registered node given its UUID from vCenter.
 // If node is not found in the vCenter for the given UUID, for ErrVMNotFound is returned to the caller
-func (m *nodeManager) DiscoverNode(nodeUUID string) error {
-	vm, err := ics.GetVirtualMachineByNameOrUUID("", nodeUUID, false)
+func (m *nodeManager) DiscoverNode(nodeUUID string, nodeName string) error {
+	vm, err := ics.GetVirtualMachineByUUID(nodeName, nodeUUID, false)
 	if err != nil {
 		klog.Errorf("Couldn't find VM instance with nodeUUID %s, failed to discover with err: %v", nodeUUID, err)
 		return err
@@ -141,6 +121,26 @@ func (m *nodeManager) DiscoverNode(nodeUUID string) error {
 	m.nodeVMs.Store(nodeUUID, vm)
 	klog.V(2).Infof("Successfully discovered node with nodeUUID %s in vm %v", nodeUUID, vm)
 	return nil
+}
+
+func (m *nodeManager) GetNodeUUID(nodeName string) (string, error) {
+	nodeUUID, found := m.nodeNameToUUID.Load(nodeName)
+	if !found {
+		klog.Errorf("Node not found with nodeName %s", nodeName)
+		return "", ErrNodeNotFound
+	}
+	if nodeUUID != nil && nodeUUID.(string) != "" {
+		return nodeUUID.(string), nil
+	}
+
+	klog.V(2).Infof("Empty nodeUUID observed in cache for the node: %q", nodeName)
+	k8snodeUUID, err := k8s.GetNodeVMUUID(m.k8sClient, nodeName)
+	if err != nil {
+		klog.Errorf("Failed to get providerId from node: %q. Err: %v", nodeName, err)
+		return "", err
+	}
+	m.nodeNameToUUID.Store(nodeName, k8snodeUUID)
+	return k8snodeUUID, nil
 }
 
 // GetNodeByName refreshes and returns the VirtualMachine for a registered node
@@ -152,7 +152,7 @@ func (m *nodeManager) GetNodeByName(nodeName string) (*ics.VirtualMachine, error
 		return nil, ErrNodeNotFound
 	}
 	if nodeUUID != nil && nodeUUID.(string) != "" {
-		return m.GetNode(nodeUUID.(string))
+		return m.GetNode(nodeUUID.(string), nodeName)
 	}
 	klog.V(2).Infof("Empty nodeUUID observed in cache for the node: %q", nodeName)
 	k8snodeUUID, err := k8s.GetNodeVMUUID(m.k8sClient, nodeName)
@@ -161,18 +161,17 @@ func (m *nodeManager) GetNodeByName(nodeName string) (*ics.VirtualMachine, error
 		return nil, err
 	}
 	m.nodeNameToUUID.Store(nodeName, k8snodeUUID)
-	return m.GetNode(k8snodeUUID)
-
+	return m.GetNode(k8snodeUUID, nodeName)
 }
 
 // GetNode refreshes and returns the VirtualMachine for a registered node
 // given its UUID
-func (m *nodeManager) GetNode(nodeUUID string) (*ics.VirtualMachine, error) {
+func (m *nodeManager) GetNode(nodeUUID string, nodeName string) (*ics.VirtualMachine, error) {
 	vmInf, discovered := m.nodeVMs.Load(nodeUUID)
 	if !discovered {
 		klog.V(2).Infof("Node hasn't been discovered yet with nodeUUID %s", nodeUUID)
 
-		if err := m.DiscoverNode(nodeUUID); err != nil {
+		if err := m.DiscoverNode(nodeUUID, nodeName); err != nil {
 			klog.Errorf("Failed to discover node with nodeUUID %s with err: %v", nodeUUID, err)
 			return nil, err
 		}

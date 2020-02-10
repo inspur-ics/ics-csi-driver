@@ -140,11 +140,10 @@ func GetVolumesInDatastore(rp RestProxyInterface, datastoreId string) ([]VolumeI
 	return volumeListRsp.Items, nil
 }
 
-func GetVmList(rp RestProxyInterface, vmName string) ([]VmInfoRsp, RestError) {
+func GetVmList(rp RestProxyInterface) ([]VmInfoRsp, RestError) {
 	var msg string
-	var restReq interface{}
 	var vmList []VmInfoRsp
-	stat, body, err := rp.Send("GET", "vms", restReq)
+	stat, body, err := rp.Send("GET", "vms", nil)
 	if err != nil {
 		msg = fmt.Sprintf("get vm list failed: stat %s err %s", stat, err.Error())
 		klog.Errorf("%s", msg)

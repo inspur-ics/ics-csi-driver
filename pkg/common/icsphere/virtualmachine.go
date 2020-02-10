@@ -102,12 +102,12 @@ const (
 	dcBufferSize = poolSize * 10
 )
 
-// GetVirtualMachineByNameOrUUID returns virtual machine given its UUID in entire VC.
+// GetVirtualMachineByUUID returns virtual machine given its UUID in entire VC.
 // If instanceUuid is set to true, then UUID is an instance UUID.
 // In this case, this function searches for virtual machines whose instance UUID matches the given uuid.
 // If instanceUuid is set to false, then UUID is BIOS UUID.
 // In this case, this function searches for virtual machines whose BIOS UUID matches the given uuid.
-func GetVirtualMachineByNameOrUUID(name string, uuid string, instanceUUID bool) (*VirtualMachine, error) {
+func GetVirtualMachineByUUID(name string, uuid string, instanceUUID bool) (*VirtualMachine, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -148,7 +148,7 @@ func GetVirtualMachineByNameOrUUID(name string, uuid string, instanceUUID bool) 
 
 					// Found some Datacenter object.
 					klog.V(2).Infof("AsyncGetAllDatacenters with name %s uuid %s sent a dc %v", name, uuid, dc)
-					vm, err = dc.GetVirtualMachineByNameOrUUID(context.Background(), name, uuid, instanceUUID)
+					vm, err = dc.GetVirtualMachineByUUID(context.Background(), name, uuid, instanceUUID)
 
 					if err != nil {
 						if err == ErrVMNotFound {

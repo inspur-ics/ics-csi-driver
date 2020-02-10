@@ -86,6 +86,10 @@ func (nodes *Nodes) nodeDelete(obj interface{}) {
 	}
 }
 
+func (nodes *Nodes) GetNodeUUID(nodeName string) (string, error) {
+	return nodes.cnsNodeManager.GetNodeUUID(nodeName)
+}
+
 // GetNodeByName returns VirtualMachine object for given nodeName
 // This is called by ControllerPublishVolume and ControllerUnpublishVolume to perform attach and detach operations.
 func (nodes *Nodes) GetNodeByName(nodeName string) (*ics.VirtualMachine, error) {
