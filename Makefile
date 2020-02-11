@@ -37,6 +37,24 @@ endif
 endif
 
 ################################################################################
+##                                DEPENDENCIES                                ##
+################################################################################
+# Verify the dependencies are in place.
+.PHONY: deps
+deps:
+	go mod download && go mod verify
+
+################################################################################
+##                                VERSIONS                                    ##
+################################################################################
+# Ensure the version is injected into the binaries via a linker flag.
+export VERSION ?= $(shell git describe --always)
+
+.PHONY: version
+version:
+	@echo $(VERSION)
+
+################################################################################
 ##                                BUILD DIRS                                  ##
 ################################################################################
 .PHONY: build-dirs
@@ -52,8 +70,7 @@ GOOS ?= linux
 GOARCH ?= amd64
 
 LDFLAGS := $(shell cat hack/make/ldflags.txt)
-LDFLAGS_CSI := $(LDFLAGS)
-#LDFLAGS_CSI := $(LDFLAGS) -X "$(MOD_NAME)/pkg/csi/service.version=$(VERSION)"
+LDFLAGS_CSI := $(LDFLAGS) -X "$(MOD_NAME)/pkg/csi/service.version=$(VERSION)"
 
 # The CSI binary.
 CSI_BIN_NAME := icsphere-csi
