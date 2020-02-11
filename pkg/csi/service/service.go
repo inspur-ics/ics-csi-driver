@@ -34,7 +34,7 @@ import (
 
 const (
 	// Name is the name of this CSI SP.
-	Name = "csi.icsphere.inspur.com"
+	Name = "csi.incloudsphere.inspur.com"
 
 	// UnixSocketPrefix is the prefix before the path on disk
 	UnixSocketPrefix = "unix://"

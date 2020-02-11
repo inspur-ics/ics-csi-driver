@@ -23,7 +23,7 @@ spec:
           lifecycle:
             preStop:
               exec:
-                command: ["/bin/sh", "-c", "rm -rf /registration/csi.icsphere.inspur.com /var/lib/kubelet/plugins_registry/csi.icsphere.inspur.com /var/lib/kubelet/plugins_registry/csi.icsphere.inspur.com-reg.sock"]
+                command: ["/bin/sh", "-c", "rm -rf /registration/csi.incloudsphere.inspur.com /var/lib/kubelet/plugins_registry/csi.incloudsphere.inspur.com /var/lib/kubelet/plugins_registry/csi.incloudsphere.inspur.com-reg.sock"]
           args:
             - "--v=5"
             - "--csi-address=$(ADDRESS)"
@@ -32,7 +32,7 @@ spec:
             - name: ADDRESS
               value: /csi/csi.sock
             - name: DRIVER_REG_SOCK_PATH
-              value: /var/lib/kubelet/plugins_registry/csi.icsphere.inspur.com/csi.sock
+              value: /var/lib/kubelet/plugins_registry/csi.incloudsphere.inspur.com/csi.sock
           securityContext:
             privileged: true
           volumeMounts:
@@ -108,7 +108,7 @@ spec:
             type: DirectoryOrCreate
         - name: plugin-dir
           hostPath:
-            path: /var/lib/kubelet/plugins_registry/csi.icsphere.inspur.com
+            path: /var/lib/kubelet/plugins_registry/csi.incloudsphere.inspur.com
             type: DirectoryOrCreate
         - name: pods-mount-dir
           hostPath:

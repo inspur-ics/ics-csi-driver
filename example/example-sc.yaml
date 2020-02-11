@@ -4,7 +4,7 @@ metadata:
   name: example-block-storageclass
   annotations:
     storageclass.kubernetes.io/is-default-class: "true"
-provisioner: csi.icsphere.inspur.com
+provisioner: csi.incloudsphere.inspur.com
 parameters:
   datastoreurl: "8a878bda6f6f3ca4016f6f458b50003c"
   fstype: "ext4" 

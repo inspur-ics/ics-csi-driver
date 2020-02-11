@@ -45,7 +45,7 @@ spec:
           lifecycle:
             preStop:
               exec:
-                command: ["/bin/sh", "-c", "rm -rf /var/lib/csi/sockets/pluginproxy/csi.icsphere.inspur.com"]
+                command: ["/bin/sh", "-c", "rm -rf /var/lib/csi/sockets/pluginproxy/csi.incloudsphere.inspur.com"]
           args:
             - "--v=5"
           env:
@@ -105,13 +105,13 @@ spec:
             secretName: ics-config-secret
         - name: socket-dir
           hostPath:
-            path: /var/lib/csi/sockets/pluginproxy/csi.icsphere.inspur.com
+            path: /var/lib/csi/sockets/pluginproxy/csi.incloudsphere.inspur.com
             type: DirectoryOrCreate
 ---
 apiVersion: storage.k8s.io/v1beta1
 kind: CSIDriver
 metadata:
-  name: csi.icsphere.inspur.com
+  name: csi.incloudsphere.inspur.com
 spec:
   attachRequired: true
   podInfoOnMount: true

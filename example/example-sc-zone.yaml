@@ -4,7 +4,7 @@ metadata:
   name: example-block-sc-zone
   annotations:
     storageclass.kubernetes.io/is-default-class: "true"
-provisioner: csi.icsphere.inspur.com
+provisioner: csi.incloudsphere.inspur.com
 allowedTopologies:
   - matchLabelExpressions:
       - key: failure-domain.beta.kubernetes.io/zone
