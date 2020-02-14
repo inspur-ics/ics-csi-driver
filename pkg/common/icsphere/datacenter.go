@@ -20,8 +20,6 @@ import (
 	"context"
 	"fmt"
 	//"strings"
-	//icsgo "github.com/inspur-ics/ics-go-sdk"
-	"github.com/inspur-ics/ics-go-sdk/client"
 	"github.com/inspur-ics/ics-go-sdk/client/types"
 	icsdc "github.com/inspur-ics/ics-go-sdk/datacenter"
 	"k8s.io/klog"
@@ -35,7 +33,6 @@ const DatastoreInfoProperty = "info"
 type Datacenter struct {
 	ID string
 	*types.Datacenter
-	Client *client.Client
 	// VirtualCenterHost represents the virtual center host ip address.
 	VirtualCenterHost string
 }
@@ -43,6 +40,37 @@ type Datacenter struct {
 func (dc *Datacenter) String() string {
 	return fmt.Sprintf("Datacenter [ID: %s Name: %s VCenter: %s]",
 		dc.ID, dc.Datacenter.Name, dc.VirtualCenterHost)
+}
+
+// Renew renews the datacenter information. If reconnect is
+// set to true, the virtual center connection is also renewed.
+func (dc *Datacenter) Renew(reconnect bool) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	vc, err := GetVirtualCenterManager().GetVirtualCenter(dc.VirtualCenterHost)
+	if err != nil {
+		klog.Errorf("Failed to get VC while renewing datacenter %v with err: %v", dc, err)
+		return err
+	}
+
+	if reconnect {
+		if err := vc.Connect(ctx); err != nil {
+			klog.Errorf("Failed reconnecting to VC %q while renewing datacenter %v with err: %v", vc.Config.Host, dc, err)
+			return err
+		}
+	}
+
+	dcService := icsdc.NewDatacenterService(vc.Client)
+	dcinfo, err := dcService.GetDatacenter(ctx, dc.ID)
+	if err != nil {
+		klog.Errorf("Failed to renew datacenter %s info with err: %v", dc.Datacenter.Name, err)
+		return err
+	} else {
+		dc.Datacenter = dcinfo
+	}
+
+	return nil
 }
 
 func (dc *Datacenter) GetVirtualMachineByUUID(ctx context.Context, hostname string, uuid string, instanceUUID bool) (*VirtualMachine, error) {

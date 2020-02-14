@@ -19,6 +19,8 @@ package icsphere
 import (
 	"context"
 	"errors"
+	"github.com/inspur-ics/ics-go-sdk/client/types"
+	icstag "github.com/inspur-ics/ics-go-sdk/tag"
 	"ics-csi-driver/pkg/common/config"
 	"ics-csi-driver/pkg/common/rest"
 	"k8s.io/klog"
@@ -82,43 +84,31 @@ func GetDatacenterTopologys(ctx context.Context) ([]rest.DataCenterTopology, err
 	return dcTopologys, nil
 }
 
-func GetClusterTags(ctx context.Context, clusterId string) ([]rest.TagInfo, error) {
-	rp, err := rest.NewRestProxy()
+func GetAttachedTags(ctx context.Context, vchost string, targetType string, targetId string) ([]types.Tag, error) {
+	vc, err := GetVirtualCenterManager().GetVirtualCenter(vchost)
 	if err != nil {
-		klog.Error("create restProxy failed.")
+		klog.Errorf("Failed to get iCenter %s with err: %v", vchost, err)
+		return nil, err
+	}
+	if err := vc.Connect(ctx); err != nil {
 		return nil, err
 	}
 
-	clusterList, err := rest.GetClusterList(rp)
+	tagService := icstag.NewTagsService(vc.Client)
+	tagList, err := tagService.ListAttachedTags(ctx, targetType, targetId)
 	if err != nil {
-		klog.Error("get cluster list failed.")
+		klog.Errorf("Get attached tag failed for %s  %s", targetType, targetId)
 		return nil, err
 	}
 
-	var tags []rest.TagInfo
-	for _, clusterInfo := range clusterList {
-		if clusterInfo.Id == clusterId {
-			klog.V(5).Infof("get cluster info successfully. %+v", clusterInfo)
-			tags = clusterInfo.Tags
-			break
-		}
-	}
-
-	if len(tags) > 0 {
-		tagList, err := rest.GetTagList(rp)
+	var tags []types.Tag
+	for _, tagId := range tagList {
+		tag, err := tagService.GetTag(ctx, tagId)
 		if err != nil {
+			klog.Errorf("Get tag %s info failed", tagId)
 			return tags, err
 		}
-		for i := range tags {
-			if len(tags[i].Description) == 0 {
-				for k := range tagList {
-					if tags[i].Id == tagList[k].Id {
-						tags[i].Description = tagList[k].Description
-						break
-					}
-				}
-			}
-		}
+		tags = append(tags, *tag)
 	}
 	return tags, nil
 }

@@ -34,8 +34,8 @@ type Host struct {
 
 // Datastore holds Datastore and Datacenter information.
 type Datastore struct {
-	// Datastore represents the ics Datastore instance.
-	*types.Datastore
+	// Storage represents the ics Datastore instance.
+	*types.Storage
 	// Datacenter represents the datacenter on which the Datastore resides.
 	Datacenter *Datacenter
 }

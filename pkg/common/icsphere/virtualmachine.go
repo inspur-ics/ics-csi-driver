@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/inspur-ics/ics-go-sdk/client/types"
-	//"ics-csi-driver/pkg/common/rest"
+	icsvm "github.com/inspur-ics/ics-go-sdk/vm"
 	"k8s.io/klog"
 	"sync"
 )
@@ -64,33 +64,40 @@ func (vm *VirtualMachine) GetAllAccessibleDatastores(ctx context.Context) ([]*Da
 }
 
 // renew renews the virtual machine and datacenter objects given its virtual center.
-func (vm *VirtualMachine) renew(vc *VirtualCenter) {
+func (vm *VirtualMachine) renew(ctx context.Context, vc *VirtualCenter) error {
 	//vm.VirtualMachine = object.NewVirtualMachine(vc.Client.Client, vm.VirtualMachine.Reference())
 	//vm.Datacenter.Datacenter = object.NewDatacenter(vc.Client.Client, vm.Datacenter.Reference())
+	vmService := icsvm.NewVirtualMachineService(vc.Client)
+	vminfo, err := vmService.GetVM(ctx, vm.VirtualMachine.ID)
+	if err != nil {
+		klog.Errorf("Failed to renew vm %s %s info with err: %v", vm.VirtualMachine.Name, vm.VirtualMachine.ID, err)
+		return err
+	}
+	vm.VirtualMachine = vminfo
+
+	return vm.Datacenter.Renew(false)
 }
 
 // Renew renews the virtual machine and datacenter information. If reconnect is
 // set to true, the virtual center connection is also renewed.
 func (vm *VirtualMachine) Renew(reconnect bool) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	vc, err := GetVirtualCenterManager().GetVirtualCenter(vm.VirtualCenterHost)
 	if err != nil {
 		klog.Errorf("Failed to get VC while renewing VM %v with err: %v", vm, err)
 		return err
 	}
 
-	/*
-		if reconnect {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			if err := vc.Connect(ctx); err != nil {
-				klog.Errorf("Failed reconnecting to VC %q while renewing VM %v with err: %v", vc.Config.Host, vm, err)
-				return err
-			}
+	if reconnect {
+		if err := vc.Connect(ctx); err != nil {
+			klog.Errorf("Failed reconnecting to VC %q while renewing VM %v with err: %v", vc.Config.Host, vm, err)
+			return err
 		}
-	*/
-	vm.renew(vc)
+	}
 
-	return nil
+	return vm.renew(ctx, vc)
 }
 
 const (
@@ -232,33 +239,30 @@ func (vm *VirtualMachine) GetZoneRegion(ctx context.Context, zoneCategoryName st
 	klog.V(5).Infof("Vm's ancestors:%+v", icsElems)
 
 	zone, region = "", ""
-	for _, elem := range icsElems {
-		if elem.Type == "DATACENTER" && vm.Datacenter.Datacenter.Description != "" {
-			region = vm.Datacenter.Datacenter.Description
-			continue
-		}
-		if elem.Type == "CLUSTER" && elem.Id != "" {
-			clusterTags, err := GetClusterTags(ctx, elem.Id)
+	for i := range icsElems {
+		elem := icsElems[len(icsElems)-i-1]
+		if elem.Type != "DATACENTER" && elem.Id != "" {
+			tags, err := GetAttachedTags(ctx, vm.VirtualCenterHost, elem.Type, elem.Id)
 			if err != nil {
+				klog.Errorf("Get attached tags faild for %s %s with err %v", elem.Type, elem.Name, err)
 				return "", "", err
 			}
-			klog.V(5).Infof("cluster %s tags:%v", elem.Name, clusterTags)
-			for _, tag := range clusterTags {
+			klog.V(5).Infof("Get %s %s tags:%v", elem.Type, elem.Name, tags)
+			for _, tag := range tags {
 				if tag.Description == regionCategoryName && region == "" {
-					region = tag.TagName
+					region = tag.Name
 					continue
 				}
 				if tag.Description == zoneCategoryName && zone == "" {
-					zone = tag.TagName
+					zone = tag.Name
 				}
 			}
 			if zone != "" && region != "" {
 				return zone, region, nil
 			}
+		} else if elem.Type == "DATACENTER" && region == "" {
+			region = vm.Datacenter.Datacenter.Description
 		}
-		//if elem.Type == "HOST" && elem.Id != "" {
-		//
-		//}
 	}
 	return zone, region, nil
 }
