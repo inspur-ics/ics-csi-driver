@@ -25,7 +25,6 @@ import (
 )
 
 type Host struct {
-	ID string
 	// Host represents the ics host info.
 	*types.Host
 	// VirtualCenterHost represents the virtual center host address.
@@ -59,7 +58,7 @@ func (di DatastoreInfo) String() string {
 func (host *Host) GetAllAccessibleDatastores(ctx context.Context) ([]*DatastoreInfo, error) {
 	vc, err := GetVirtualCenterManager().GetVirtualCenter(host.VirtualCenterHost)
 	if err != nil {
-		klog.Errorf("Failed to get VC for host %v with err: %v", host.ID, err)
+		klog.Errorf("Failed to get VC for host %s with err: %v", host.Host.Name, err)
 		return nil, err
 	}
 	if err := vc.Connect(ctx); err != nil {
@@ -67,9 +66,9 @@ func (host *Host) GetAllAccessibleDatastores(ctx context.Context) ([]*DatastoreI
 	}
 
 	hostService := icshost.NewHostService(vc.Client)
-	datastoreList, err := hostService.GetHostAvailStorages(ctx, host.ID)
+	datastoreList, err := hostService.GetHostAvailStorages(ctx, host.Host.ID)
 	if err != nil {
-		klog.Errorf("get datastore list of host %s failed.", host.ID)
+		klog.Errorf("Failed to get datastore list for host %s with err: %v", host.Host.Name, err)
 		return nil, err
 	}
 	var dsList []*DatastoreInfo

@@ -22,7 +22,6 @@ import (
 	"github.com/inspur-ics/ics-go-sdk/client/types"
 	icstag "github.com/inspur-ics/ics-go-sdk/tag"
 	"ics-csi-driver/pkg/common/config"
-	"ics-csi-driver/pkg/common/rest"
 	"k8s.io/klog"
 	"strconv"
 	"strings"
@@ -66,22 +65,6 @@ func GetVcenterIPs(cfg *config.Config) ([]string, error) {
 		err = errors.New("Unable get vCenter Hosts from Config")
 	}
 	return vCenterIPs, err
-}
-
-func GetDatacenterTopologys(ctx context.Context) ([]rest.DataCenterTopology, error) {
-	rp, err := rest.NewRestProxy()
-	if err != nil {
-		klog.Error("create restProxy failed.")
-		return nil, err
-	}
-
-	dcTopologys, err := rest.GetDataCenterTopology(rp)
-	if err != nil {
-		klog.Error("get datacenter topology failed.")
-		return nil, err
-	}
-
-	return dcTopologys, nil
 }
 
 func GetAttachedTags(ctx context.Context, vchost string, targetType string, targetId string) ([]types.Tag, error) {

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/inspur-ics/ics-go-sdk/client/types"
+	icshost "github.com/inspur-ics/ics-go-sdk/host"
 	icsvm "github.com/inspur-ics/ics-go-sdk/vm"
 	"k8s.io/klog"
 	"sync"
@@ -41,11 +42,10 @@ type VirtualMachine struct {
 	Datacenter *Datacenter
 }
 
-type IcsEntity struct {
-	Id    string
-	Name  string
-	State string
-	Type  string
+type IcsObject struct {
+	ID   string
+	Name string
+	Type string
 }
 
 func (vm *VirtualMachine) String() string {
@@ -53,28 +53,55 @@ func (vm *VirtualMachine) String() string {
 		vm.VirtualMachine.Name, vm.VirtualMachine.Description, vm.UUID, vm.Datacenter)
 }
 
-// GetAllAccessibleDatastores gets the list of accessible Datastores for the given Virtual Machine
-func (vm *VirtualMachine) GetAllAccessibleDatastores(ctx context.Context) ([]*DatastoreInfo, error) {
-	hostId := vm.VirtualMachine.HostID
-	host := Host{
-		ID:                hostId,
+// GetHostSystem returns the host which the virtual machine belongs to
+func (vm *VirtualMachine) GetHostSystem(ctx context.Context) (*Host, error) {
+	vc, err := GetVirtualCenterManager().GetVirtualCenter(vm.VirtualCenterHost)
+	if err != nil {
+		klog.Errorf("Failed to get VC for vm %v with err: %v", vm, err)
+		return nil, err
+	}
+	if err := vc.Connect(ctx); err != nil {
+		return nil, err
+	}
+
+	if err := vm.renew(ctx, vc); err != nil {
+		return nil, err
+	}
+
+	hostService := icshost.NewHostService(vc.Client)
+	hostInfo, err := hostService.GetHost(ctx, vm.VirtualMachine.HostID)
+	if err != nil {
+		klog.Errorf("Failed to get host %s info for vm %v with err: %v", vm.VirtualMachine.HostName, vm, err)
+		return nil, err
+	}
+
+	host := &Host{
+		Host:              hostInfo,
 		VirtualCenterHost: vm.VirtualCenterHost,
 	}
+	return host, nil
+}
+
+// GetAllAccessibleDatastores gets the list of accessible Datastores for the given Virtual Machine
+func (vm *VirtualMachine) GetAllAccessibleDatastores(ctx context.Context) ([]*DatastoreInfo, error) {
+	host, err := vm.GetHostSystem(ctx)
+	if err != nil {
+		klog.Errorf("Failed to get host info for vm %v with err:%v", vm, err)
+		return nil, err
+	}
+
 	return host.GetAllAccessibleDatastores(ctx)
 }
 
 // renew renews the virtual machine and datacenter objects given its virtual center.
 func (vm *VirtualMachine) renew(ctx context.Context, vc *VirtualCenter) error {
-	//vm.VirtualMachine = object.NewVirtualMachine(vc.Client.Client, vm.VirtualMachine.Reference())
-	//vm.Datacenter.Datacenter = object.NewDatacenter(vc.Client.Client, vm.Datacenter.Reference())
 	vmService := icsvm.NewVirtualMachineService(vc.Client)
 	vminfo, err := vmService.GetVM(ctx, vm.VirtualMachine.ID)
 	if err != nil {
-		klog.Errorf("Failed to renew vm %s %s info with err: %v", vm.VirtualMachine.Name, vm.VirtualMachine.ID, err)
+		klog.Errorf("Failed to renew vm %v info with err: %v", vm, err)
 		return err
 	}
 	vm.VirtualMachine = vminfo
-
 	return vm.Datacenter.Renew(false)
 }
 
@@ -194,73 +221,70 @@ func GetVirtualMachineByUUID(name string, uuid string, instanceUUID bool) (*Virt
 	}
 }
 
-func (vm *VirtualMachine) GetAncestors(ctx context.Context) ([]IcsEntity, error) {
-	dcTopologys, err := GetDatacenterTopologys(ctx)
-	if err != err {
-		klog.Error("Failed to get datacenter topology.")
+func (vm *VirtualMachine) GetAncestors(ctx context.Context) ([]IcsObject, error) {
+	host, err := vm.GetHostSystem(ctx)
+	if err != nil {
+		klog.Errorf("Failed to get host info for vm %s with err: %v", vm, err)
 		return nil, err
 	}
-	var vmAncestors []IcsEntity
-	for _, dcItem := range dcTopologys {
-		if dcItem.TargetType == "DATACENTER" && dcItem.Id == vm.Datacenter.ID {
-			icsEntity := IcsEntity{Id: dcItem.Id, Name: dcItem.Text, State: dcItem.State, Type: dcItem.TargetType}
-			vmAncestors = append(vmAncestors, icsEntity)
-			if len(dcItem.Children) > 0 {
-				for _, item := range dcItem.Children {
-					if item.TargetType == "HOST" && item.Id == vm.VirtualMachine.HostID {
-						icsEntity = IcsEntity{Id: item.Id, Name: item.Text, State: item.State, Type: item.TargetType}
-						vmAncestors = append(vmAncestors, icsEntity)
-						return vmAncestors, nil
-					} else if item.TargetType == "CLUSTER" && len(item.Children) > 0 {
-						for _, host := range item.Children {
-							if host.TargetType == "HOST" && host.Id == vm.VirtualMachine.HostID {
-								icsEntity = IcsEntity{Id: item.Id, Name: item.Text, State: item.State, Type: item.TargetType}
-								vmAncestors = append(vmAncestors, icsEntity)
-								icsEntity = IcsEntity{Id: host.Id, Name: host.Text, State: host.State, Type: host.TargetType}
-								vmAncestors = append(vmAncestors, icsEntity)
-								return vmAncestors, nil
-							}
-						}
-					}
-				}
-			}
-		}
+
+	var icsObjs []IcsObject
+	hostObj := IcsObject{
+		ID:   host.Host.ID,
+		Name: host.Host.Name,
+		Type: "HOST",
 	}
-	return vmAncestors, nil
+	icsObjs = append(icsObjs, hostObj)
+
+	if host.Host.ClusterID != "" {
+		cluster := IcsObject{
+			ID:   host.Host.ClusterID,
+			Name: host.Host.ClusterName,
+			Type: "CLUSTER",
+		}
+		icsObjs = append(icsObjs, cluster)
+	}
+
+	datacenter := IcsObject{
+		ID:   host.Host.DataCenterID,
+		Name: host.Host.DataCenterName,
+		Type: "DATACENTER",
+	}
+	icsObjs = append(icsObjs, datacenter)
+
+	return icsObjs, nil
 }
 
 // GetZoneRegion returns zone and region of the node vm
 func (vm *VirtualMachine) GetZoneRegion(ctx context.Context, zoneCategoryName string, regionCategoryName string) (zone string, region string, err error) {
-	icsElems, err := vm.GetAncestors(ctx)
+	icsObjs, err := vm.GetAncestors(ctx)
 	if err != nil {
-		klog.Errorf("GetAncestors failed for %s with err %v", vm.VirtualMachine.Name, err)
+		klog.Errorf("GetAncestors failed for %v with err %v", vm, err)
 		return "", "", err
 	}
-	klog.V(5).Infof("Vm's ancestors:%+v", icsElems)
+	klog.V(5).Infof("Vm's ancestors:%+v", icsObjs)
 
 	zone, region = "", ""
-	for i := range icsElems {
-		elem := icsElems[len(icsElems)-i-1]
-		if elem.Type != "DATACENTER" && elem.Id != "" {
-			tags, err := GetAttachedTags(ctx, vm.VirtualCenterHost, elem.Type, elem.Id)
+	// search the hierarchy, example order: ["HOST", "CLUSTER", "DATACENTER"]
+	for _, obj := range icsObjs {
+		if obj.Type != "DATACENTER" && obj.ID != "" {
+			tags, err := GetAttachedTags(ctx, vm.VirtualCenterHost, obj.Type, obj.ID)
 			if err != nil {
-				klog.Errorf("Get attached tags faild for %s %s with err %v", elem.Type, elem.Name, err)
+				klog.Errorf("Get attached tags faild for %s %s with err %v", obj.Type, obj.Name, err)
 				return "", "", err
 			}
-			klog.V(5).Infof("Get %s %s tags:%v", elem.Type, elem.Name, tags)
+			klog.V(5).Infof("Get %s %s tags:%+v", obj.Type, obj.Name, tags)
 			for _, tag := range tags {
 				if tag.Description == regionCategoryName && region == "" {
 					region = tag.Name
-					continue
-				}
-				if tag.Description == zoneCategoryName && zone == "" {
+				} else if tag.Description == zoneCategoryName && zone == "" {
 					zone = tag.Name
 				}
+				if zone != "" && region != "" {
+					return zone, region, nil
+				}
 			}
-			if zone != "" && region != "" {
-				return zone, region, nil
-			}
-		} else if elem.Type == "DATACENTER" && region == "" {
+		} else if obj.Type == "DATACENTER" && region == "" {
 			region = vm.Datacenter.Datacenter.Description
 		}
 	}

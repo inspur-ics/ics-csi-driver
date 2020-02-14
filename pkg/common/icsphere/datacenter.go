@@ -66,10 +66,8 @@ func (dc *Datacenter) Renew(reconnect bool) error {
 	if err != nil {
 		klog.Errorf("Failed to renew datacenter %s info with err: %v", dc.Datacenter.Name, err)
 		return err
-	} else {
-		dc.Datacenter = dcinfo
 	}
-
+	dc.Datacenter = dcinfo
 	return nil
 }
 
