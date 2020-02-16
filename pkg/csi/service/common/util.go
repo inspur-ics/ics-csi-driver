@@ -18,13 +18,9 @@ package common
 
 import (
 	"context"
-	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/inspur-ics/ics-go-sdk/client/types"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	ics "ics-csi-driver/pkg/common/icsphere"
-	"ics-csi-driver/pkg/common/rest"
 	"k8s.io/klog"
 	"strconv"
 	"strings"
@@ -32,8 +28,6 @@ import (
 
 // CreateVolumeUtil is the helper function to create CNS volume
 func CreateVolumeUtil(ctx context.Context, manager *Manager, spec *CreateVolumeSpec) (string, error) {
-	klog.V(4).Infof("creating volume %s with create spec %+v", spec.Name, *spec)
-
 	createVolumeReq := types.VolumeReq{
 		Name:          spec.Name,
 		Size:          strconv.FormatInt(spec.CapacityGB, 10),
@@ -47,124 +41,39 @@ func CreateVolumeUtil(ctx context.Context, manager *Manager, spec *CreateVolumeS
 
 	volumeId, err := manager.VolumeManager.CreateVolume(createVolumeReq)
 	if err != nil {
-		klog.V(4).Infof("create volume failed  with args %+v", createVolumeReq)
+		klog.V(4).Infof("Failed to create volume %s with err: %v", createVolumeReq.Name, err)
 		return volumeId, err
 	} else {
-		klog.V(4).Infof("successfully created volume %s. volumeId: %s", spec.Name, volumeId)
+		klog.V(4).Infof("Successfully created volume %s. volumeId: %s", spec.Name, volumeId)
 		return volumeId, nil
 	}
 }
 
-func AttachVolumeUtil(ctx context.Context, vmUuid string, vmName string, volumeId string) (string, error) {
-	scsiId, vmId := "", ""
-	rp, err := rest.NewRestProxy()
+// AttachVolumeUtil is the helper function to attach CNS volume to specified vm
+func AttachVolumeUtil(ctx context.Context, manager *Manager, vm *ics.VirtualMachine, volumeId string) (string, error) {
+	diskUUID, err := manager.VolumeManager.AttachVolume(vm, volumeId)
 	if err != nil {
-		klog.Error("create restProxy failed.")
-		return scsiId, err
+		klog.Errorf("Failed to attach disk %s to VM %v with err %+v", volumeId, vm, err)
+		return "", err
 	}
-
-	vmList, err := rest.GetVmList(rp)
-	if err != nil {
-		klog.Error("get vm list failed.")
-		return scsiId, err
-	}
-
-	if len(vmList) > 0 {
-		for _, vmInfo := range vmList {
-			if vmInfo.Uuid == vmUuid {
-				vmId = vmInfo.Id
-				klog.V(5).Infof("find vm %s %s with id %s", vmUuid, vmName, vmId)
-				break
-			}
-		}
-	}
-
-	if vmId == "" {
-		klog.Errorf("vm %s %s not found", vmUuid, vmName)
-		return scsiId, status.Errorf(codes.Internal,
-			"vm %s %s not found", vmUuid, vmName)
-	}
-
-	vmInfo, err := rest.GetVmInfo(rp, vmId)
-	if err != nil {
-		klog.Error("get vm info failed.")
-		return scsiId, err
-	}
-
-	volumeInfo, err := rest.GetVolumeInfo(rp, volumeId)
-	if err != nil {
-		klog.Error("get volume info failed.")
-		return scsiId, err
-	}
-
-	volId := volumeInfo.Id
-	diskInfo := rest.VmDiskInfo{
-		Id:             volumeInfo.Id,
-		Label:          "",
-		ScsiId:         fmt.Sprintf("6%.15s", volId[len(volId)-15:]),
-		Enabled:        false,
-		Volume:         volumeInfo,
-		BusModel:       "SCSI",
-		ReadWriteModel: "NONE",
-		EnableNativeIO: false,
-	}
-	vmInfo.Disks = append(vmInfo.Disks, diskInfo)
-	for _, disk := range vmInfo.Disks {
-		if disk.BusModel == "SCSI" {
-			disk.Volume.DiskType = "SAS"
-		}
-	}
-	vmInfo.VncPasswd = "00000000"
-	klog.V(4).Infof("attaching volume %s to vm %s %s", volumeId, vmUuid, vmName)
-	taskId, err := rest.SetVmInfo(rp, vmInfo)
-	if err != nil {
-		klog.Errorf("attach volume %s to vm %s %s failed.", volumeId, vmUuid, vmName)
-		return scsiId, err
-	}
-
-	taskStat, err := rest.GetTaskState(rp, taskId)
-	if err != nil {
-		return scsiId, err
-	} else if taskStat != "FINISHED" {
-		return scsiId, status.Errorf(codes.Internal,
-			"set vm info failed: taskId %s stat %s", taskId, taskStat)
-	}
-
-	klog.V(4).Infof("successfully attached disk %s to vm %s %s. scsi wwn: %s",
-		volumeId, vmUuid, vmName, diskInfo.ScsiId)
-	return diskInfo.ScsiId, nil
+	klog.V(4).Infof("Successfully attached disk %s to vm %s. Disk UUID:%s", volumeId, vm.VirtualMachine.Name, diskUUID)
+	return diskUUID, nil
 }
 
-func DeleteVolumeUtil(ctx context.Context, volumeId string, deleteVolume bool) error {
-	rp, err := rest.NewRestProxy()
+// DeleteVolumeUtil is the helper function to delete CNS volume for given volumeId
+func DeleteVolumeUtil(ctx context.Context, manager *Manager, volumeId string, deleteVolume bool) error {
+	err := manager.VolumeManager.DeleteVolume(volumeId, deleteVolume)
 	if err != nil {
-		klog.Error("create restProxy failed.")
+		klog.Errorf("Failed to delete volume %s with err: %+v", volumeId, err)
 		return err
 	}
 
-	klog.V(4).Infof("deleting volume: %s", volumeId)
-	taskId, err := rest.DeleteVolume(rp, volumeId, deleteVolume)
-	if err != nil {
-		klog.Errorf("delete volume %s failed.", volumeId)
-		return err
-	}
-
-	taskStat, err := rest.GetTaskState(rp, taskId)
-	if err != nil {
-		klog.Errorf("get task state failed.")
-		return err
-	} else if taskStat != "FINISHED" {
-		return status.Errorf(codes.Internal,
-			"delete volume %s failed: taskId %s stat %s", volumeId, taskId, taskStat)
-	}
-
-	klog.V(4).Infof("successfully deleted volume: %s", volumeId)
+	klog.V(4).Infof("Successfully deleted volume %s", volumeId)
 	return nil
 }
 
 // GetVCenter returns VirtualCenter object from specified Manager object.
 // Before returning VirtualCenter object, vcenter connection is established if session doesn't exist.
-
 func GetVCenter(ctx context.Context, manager *Manager) (*ics.VirtualCenter, error) {
 	var err error
 	vcenter, err := manager.VcenterManager.GetVirtualCenter(manager.VcenterConfig.Host)

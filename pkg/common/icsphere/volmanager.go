@@ -21,16 +21,20 @@ import (
 	"errors"
 	"fmt"
 	"github.com/inspur-ics/ics-go-sdk/client/types"
+	icsvm "github.com/inspur-ics/ics-go-sdk/vm"
 	icsvol "github.com/inspur-ics/ics-go-sdk/volume"
-	"sync"
-	//"github.com/davecgh/go-spew/spew"
 	"k8s.io/klog"
+	"sync"
 )
 
 // VolumeManager provides functionality to manage volumes.
 type VolumeManager interface {
 	// CreateVolume creates a new volume given its spec.
 	CreateVolume(req types.VolumeReq) (string, error)
+	// DeleteVolume deletes a volume given its spec.
+	DeleteVolume(volumeId string, deleteVolume bool) error
+	// AttachVolume attaches a volume to a virtual machine given the spec.
+	AttachVolume(vm *VirtualMachine, volumeId string) (string, error)
 }
 
 var (
@@ -114,4 +118,105 @@ func (m *volumeManager) CreateVolume(req types.VolumeReq) (string, error) {
 	errMsg := fmt.Sprintf("Volume %s not found in storage %s. Create volume failed.", req.Name, req.DataStoreId)
 	klog.Errorf(errMsg)
 	return "", errors.New(errMsg)
+}
+
+// DeleteVolume deletes a volume given id.
+func (m *volumeManager) DeleteVolume(volumeId string, deleteVolume bool) error {
+	err := validateManager(m)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err = m.virtualCenter.Connect(ctx)
+	if err != nil {
+		klog.Errorf("Virtual Center Connect failed with err: %+v", err)
+		return err
+	}
+
+	volService := icsvol.NewVolumeService(m.virtualCenter.Client)
+	task, err := volService.DeleteVolume(ctx, volumeId, deleteVolume)
+	if err != nil {
+		klog.Errorf("Delete volume %s failed with err: %+v", volumeId, err)
+		return err
+	}
+
+	klog.V(5).Infof("Deleting volume %s task info: %+v", volumeId, task)
+	taskState, err := GetTaskState(ctx, m.virtualCenter, &task)
+	if err != nil {
+		klog.Errorf("Deleting volume %s task failed with err: %+v", volumeId, err)
+		return err
+	} else if taskState != "FINISHED" {
+		errMsg := fmt.Sprintf("Delete volume %s task state %s", volumeId, taskState)
+		klog.Errorf(errMsg)
+		return errors.New(errMsg)
+	}
+	klog.V(5).Infof("Delete volume %s task finished", volumeId)
+	return nil
+}
+
+// AttachVolume attaches a volume to a virtual machine given the spec.
+func (m *volumeManager) AttachVolume(vm *VirtualMachine, volumeId string) (string, error) {
+	err := validateManager(m)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err = m.virtualCenter.Connect(ctx)
+	if err != nil {
+		klog.Errorf("Virtual Center Connect failed with err: %+v", err)
+		return "", err
+	}
+
+	volService := icsvol.NewVolumeService(m.virtualCenter.Client)
+	volInfo, err := volService.GetVolumeInfoById(ctx, volumeId)
+	if err != nil {
+		klog.Errorf("Get volume %s info failed with err: %+v", volumeId, err)
+		return "", err
+	}
+
+	diskInfo := types.Disk{
+		ID:             volumeId,
+		Label:          "",
+		ScsiID:         fmt.Sprintf("6%.15s", volumeId[len(volumeId)-15:]),
+		Enabled:        false,
+		Volume:         volInfo,
+		BusModel:       "SCSI",
+		ReadWriteModel: "NONE",
+		EnableNativeIO: false,
+	}
+
+	vmInfo := *vm.VirtualMachine
+	vmInfo.Disks = append(vmInfo.Disks, diskInfo)
+	for _, disk := range vmInfo.Disks {
+		if disk.BusModel == "SCSI" {
+			disk.Volume.DiskType = "SAS"
+		}
+	}
+	vmInfo.VncPasswd = "00000000"
+	klog.V(4).Infof("Attaching volume %s to VM %v", volumeId, vm)
+
+	vmService := icsvm.NewVirtualMachineService(m.virtualCenter.Client)
+	task, err := vmService.SetVM(ctx, vmInfo)
+	if err != nil {
+		klog.Errorf("Failed to attach volume %s to VM %v with err: %+v", volumeId, vm, err)
+		return "", err
+	}
+
+	klog.V(5).Infof("Attach volume %s task info: %+v", volumeId, *task)
+	taskState, err := GetTaskState(ctx, m.virtualCenter, task)
+	if err != nil {
+		klog.Errorf("Attach volume %s task failed with err: %+v", volumeId, err)
+		return "", err
+	} else if taskState != "FINISHED" {
+		errMsg := fmt.Sprintf("Attach volume %s task state %s", volumeId, taskState)
+		klog.Errorf(errMsg)
+		return "", errors.New(errMsg)
+	}
+
+	klog.V(5).Infof("Attach volume %s task finished", volumeId)
+	return diskInfo.ScsiID, nil
 }

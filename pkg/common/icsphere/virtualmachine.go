@@ -49,7 +49,7 @@ type IcsObject struct {
 }
 
 func (vm *VirtualMachine) String() string {
-	return fmt.Sprintf("VM [Name: %v, Desc: %v, UUID: %v, Datacenter: %v]",
+	return fmt.Sprintf("[Name: %v, Desc: %v, UUID: %v, Datacenter: %v]",
 		vm.VirtualMachine.Name, vm.VirtualMachine.Description, vm.UUID, vm.Datacenter)
 }
 

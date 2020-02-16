@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc/status"
 	"ics-csi-driver/pkg/common/config"
 	"ics-csi-driver/pkg/common/icsphere"
-	"ics-csi-driver/pkg/common/rest"
 	"ics-csi-driver/pkg/csi/service/common"
 	csitypes "ics-csi-driver/pkg/csi/types"
 	"io/ioutil"
@@ -503,13 +502,6 @@ func (s *service) NodeGetInfo(
 		if err != nil {
 			klog.Errorf("Failed to connect to vcenter host: %s. err=%v", vcenter.Config.Host, err)
 			return nil, status.Errorf(codes.Internal, err.Error())
-		}
-
-		rest.DefaultRestCfg = rest.RestProxyCfg{
-			Addr: vcenterconfig.Host,
-			Port: vcenterconfig.Port,
-			User: vcenterconfig.Username,
-			Pass: vcenterconfig.Password,
 		}
 
 		uuid, err := getSystemUUID()

@@ -50,7 +50,7 @@ type DatastoreInfo struct {
 }
 
 func (di DatastoreInfo) String() string {
-	return fmt.Sprintf("Datastore ID: %v, Type: %v, Name: %v, Capacity: %v, AvailCapacity: %v",
+	return fmt.Sprintf("[ID: %v, Type: %v, Name: %v, Capacity: %v, AvailCapacity: %v]",
 		di.ID, di.Type, di.Name, di.Capacity, di.AvailCapacity)
 }
 

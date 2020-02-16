@@ -29,7 +29,6 @@ import (
 
 	"ics-csi-driver/pkg/common/config"
 	ics "ics-csi-driver/pkg/common/icsphere"
-	"ics-csi-driver/pkg/common/rest"
 	"ics-csi-driver/pkg/csi/service/common"
 	csitypes "ics-csi-driver/pkg/csi/types"
 )
@@ -92,13 +91,6 @@ func (c *controller) Init(config *config.Config) error {
 		return err
 	}
 	klog.Infof("Successfully get vcenter %+v", vc)
-
-	rest.DefaultRestCfg = rest.RestProxyCfg{
-		Addr: vcenterconfig.Host,
-		Port: vcenterconfig.Port,
-		User: vcenterconfig.Username,
-		Pass: vcenterconfig.Password,
-	}
 
 	c.nodeMgr = &Nodes{}
 	err = c.nodeMgr.Initialize()
@@ -239,7 +231,7 @@ func (c *controller) DeleteVolume(ctx context.Context, req *csi.DeleteVolumeRequ
 	if err != nil {
 		return nil, err
 	}
-	err = common.DeleteVolumeUtil(ctx, req.VolumeId, true)
+	err = common.DeleteVolumeUtil(ctx, c.manager, req.VolumeId, true)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to delete volume: %q. Error: %+v", req.VolumeId, err)
 		klog.Error(msg)
@@ -255,21 +247,28 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 	*csi.ControllerPublishVolumeResponse, error) {
 	klog.V(4).Infof("ControllerPublishVolume: called with args %+v", *req)
 
-	nodeUUID, err := c.nodeMgr.GetNodeUUID(req.NodeId)
+	err := common.ValidateControllerPublishVolumeRequest(req)
+	if err != nil {
+		msg := fmt.Sprintf("Validation for PublishVolume Request: %+v has failed. Error: %v", *req, err)
+		klog.Error(msg)
+		return nil, status.Errorf(codes.Internal, msg)
+	}
+	node, err := c.nodeMgr.GetNodeByName(req.NodeId)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to find VirtualMachine for node:%q. Error: %v", req.NodeId, err)
 		klog.Error(msg)
 		return nil, status.Errorf(codes.Internal, msg)
 	}
+	klog.V(4).Infof("Found VirtualMachine for node:%q.", req.NodeId)
 
-	scsiId, err := common.AttachVolumeUtil(ctx, nodeUUID, req.NodeId, req.VolumeId)
+	diskUUID, err := common.AttachVolumeUtil(ctx, c.manager, node, req.VolumeId)
 	if err != nil {
 		klog.Errorf("ControllerPublishVolume: failed with err %v", err)
 	}
 
 	publishInfo := make(map[string]string)
 	publishInfo[common.AttributeDiskType] = common.DiskTypeString
-	publishInfo[common.AttributeFirstClassDiskUUID] = scsiId
+	publishInfo[common.AttributeFirstClassDiskUUID] = diskUUID
 	resp := &csi.ControllerPublishVolumeResponse{
 		PublishContext: publishInfo,
 	}

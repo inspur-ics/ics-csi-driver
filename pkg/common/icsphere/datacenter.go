@@ -38,7 +38,7 @@ type Datacenter struct {
 }
 
 func (dc *Datacenter) String() string {
-	return fmt.Sprintf("Datacenter [ID: %s Name: %s VCenter: %s]",
+	return fmt.Sprintf("[ID: %s Name: %s VCenter: %s]",
 		dc.ID, dc.Datacenter.Name, dc.VirtualCenterHost)
 }
 
