@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/inspur-ics/ics-go-sdk/client/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	ics "ics-csi-driver/pkg/common/icsphere"
@@ -30,20 +31,21 @@ import (
 )
 
 // CreateVolumeUtil is the helper function to create CNS volume
-func CreateVolumeUtil(ctx context.Context, spec *CreateVolumeSpec) (string, error) {
+func CreateVolumeUtil(ctx context.Context, manager *Manager, spec *CreateVolumeSpec) (string, error) {
 	klog.V(4).Infof("creating volume %s with create spec %+v", spec.Name, *spec)
-	createVolumeReq := rest.CreateVolumeReq{
+
+	createVolumeReq := types.VolumeReq{
 		Name:          spec.Name,
 		Size:          strconv.FormatInt(spec.CapacityGB, 10),
 		DataStoreId:   spec.DatastoreID,
 		DataStoreType: "LOCAL",
 		VolumePolicy:  "THIN",
-		Description:   "k8s",
+		Description:   "CSI Persistent Volume",
 		Bootable:      false,
 		Shared:        false,
 	}
 
-	volumeId, err := rest.CreateVolume(createVolumeReq)
+	volumeId, err := manager.VolumeManager.CreateVolume(createVolumeReq)
 	if err != nil {
 		klog.V(4).Infof("create volume failed  with args %+v", createVolumeReq)
 		return volumeId, err
@@ -170,13 +172,13 @@ func GetVCenter(ctx context.Context, manager *Manager) (*ics.VirtualCenter, erro
 		klog.Errorf("Failed to get VirtualCenter instance for host: %q. err=%v", manager.VcenterConfig.Host, err)
 		return nil, err
 	}
-	/*
-		err = vcenter.Connect(ctx)
-		if err != nil {
-			klog.Errorf("Failed to connect to VirtualCenter host: %q. err=%v", manager.VcenterConfig.Host, err)
-			return nil, err
-		}
-	*/
+
+	err = vcenter.Connect(ctx)
+	if err != nil {
+		klog.Errorf("Failed to connect to VirtualCenter host: %q. err=%v", manager.VcenterConfig.Host, err)
+		return nil, err
+	}
+
 	return vcenter, nil
 }
 

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"github.com/inspur-ics/ics-go-sdk/client/types"
+	icsgo "github.com/inspur-ics/ics-go-sdk/common"
 	icstag "github.com/inspur-ics/ics-go-sdk/tag"
 	"ics-csi-driver/pkg/common/config"
 	"k8s.io/klog"
@@ -67,20 +68,11 @@ func GetVcenterIPs(cfg *config.Config) ([]string, error) {
 	return vCenterIPs, err
 }
 
-func GetAttachedTags(ctx context.Context, vchost string, targetType string, targetId string) ([]types.Tag, error) {
-	vc, err := GetVirtualCenterManager().GetVirtualCenter(vchost)
-	if err != nil {
-		klog.Errorf("Failed to get iCenter %s with err: %v", vchost, err)
-		return nil, err
-	}
-	if err := vc.Connect(ctx); err != nil {
-		return nil, err
-	}
-
+func GetAttachedTags(ctx context.Context, vc *VirtualCenter, targetType string, targetId string) ([]types.Tag, error) {
 	tagService := icstag.NewTagsService(vc.Client)
 	tagList, err := tagService.ListAttachedTags(ctx, targetType, targetId)
 	if err != nil {
-		klog.Errorf("Get attached tag failed for %s  %s", targetType, targetId)
+		klog.Errorf("Get attached tag failed for %s  %s with err: %v", targetType, targetId, err)
 		return nil, err
 	}
 
@@ -88,10 +80,25 @@ func GetAttachedTags(ctx context.Context, vchost string, targetType string, targ
 	for _, tagId := range tagList {
 		tag, err := tagService.GetTag(ctx, tagId)
 		if err != nil {
-			klog.Errorf("Get tag %s info failed", tagId)
+			klog.Errorf("Get tag %s info failed with err: %v", tagId, err)
 			return tags, err
 		}
 		tags = append(tags, *tag)
 	}
 	return tags, nil
+}
+
+func GetTaskState(ctx context.Context, vc *VirtualCenter, task *types.Task) (string, error) {
+	restapi := &icsgo.RestAPI{
+		RestAPITripper: vc.Client,
+	}
+
+	taskInfo, err := restapi.TraceTaskProcess(task)
+	if err != nil {
+		klog.Errorf("Get task %s state failed with err: %", err)
+		return "unknown", err
+	}
+	klog.V(5).Infof("Task %s state: %+v", task.TaskId, taskInfo)
+
+	return taskInfo.State, nil
 }

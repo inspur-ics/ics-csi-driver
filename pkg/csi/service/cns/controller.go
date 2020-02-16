@@ -80,6 +80,7 @@ func (c *controller) Init(config *config.Config) error {
 	c.manager = &common.Manager{
 		VcenterConfig:  vcenterconfig,
 		CnsConfig:      config,
+		VolumeManager:  ics.GetVolumeManager(vc),
 		VcenterManager: ics.GetVirtualCenterManager(),
 	}
 
@@ -201,7 +202,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 		return nil, status.Error(codes.InvalidArgument, errMsg)
 	}
 
-	volumeID, err := common.CreateVolumeUtil(ctx, &createVolumeSpec)
+	volumeID, err := common.CreateVolumeUtil(ctx, c.manager, &createVolumeSpec)
 	if err != nil {
 		msg := fmt.Sprintf("Failed to create volume. Error: %+v", err)
 		klog.Error(msg)

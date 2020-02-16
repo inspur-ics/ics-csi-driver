@@ -264,11 +264,17 @@ func (vm *VirtualMachine) GetZoneRegion(ctx context.Context, zoneCategoryName st
 	}
 	klog.V(5).Infof("Vm's ancestors:%+v", icsObjs)
 
+	vc, err := GetVirtualCenterManager().GetVirtualCenter(vm.VirtualCenterHost)
+	if err != nil {
+		klog.Errorf("Failed to get iCenter %s with err: %v", vm.VirtualCenterHost, err)
+		return "", "", err
+	}
+
 	zone, region = "", ""
 	// search the hierarchy, example order: ["HOST", "CLUSTER", "DATACENTER"]
 	for _, obj := range icsObjs {
 		if obj.Type != "DATACENTER" && obj.ID != "" {
-			tags, err := GetAttachedTags(ctx, vm.VirtualCenterHost, obj.Type, obj.ID)
+			tags, err := GetAttachedTags(ctx, vc, obj.Type, obj.ID)
 			if err != nil {
 				klog.Errorf("Get attached tags faild for %s %s with err %v", obj.Type, obj.Name, err)
 				return "", "", err
