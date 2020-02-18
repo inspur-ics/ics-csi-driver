@@ -19,6 +19,7 @@ package icsphere
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/inspur-ics/ics-go-sdk/client/types"
 	icsgo "github.com/inspur-ics/ics-go-sdk/common"
 	icstag "github.com/inspur-ics/ics-go-sdk/tag"
@@ -89,16 +90,22 @@ func GetAttachedTags(ctx context.Context, vc *VirtualCenter, targetType string, 
 }
 
 func GetTaskState(ctx context.Context, vc *VirtualCenter, task *types.Task) (string, error) {
+	state := "Unknown"
+	if task == nil {
+		return state, errors.New("Task value is nil")
+	} else if task.TaskId == "" {
+		return state, errors.New("TaskId is empty")
+	}
+
 	restapi := &icsgo.RestAPI{
 		RestAPITripper: vc.Client,
 	}
-
 	taskInfo, err := restapi.TraceTaskProcess(task)
-	if err != nil {
-		klog.Errorf("Get task %s state failed with err: %", err)
-		return "unknown", err
+	if err != nil || taskInfo == nil {
+		errMsg := fmt.Sprintf("Failed to get  task %s state with err: %+v", task.TaskId, err)
+		return state, errors.New(errMsg)
 	}
-	klog.V(5).Infof("Task %s state: %+v", task.TaskId, taskInfo)
 
+	klog.V(5).Infof("Task %s state: %+v", task.TaskId, taskInfo)
 	return taskInfo.State, nil
 }

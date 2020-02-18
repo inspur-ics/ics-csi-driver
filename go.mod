@@ -29,7 +29,7 @@ require (
 	github.com/akutz/gofsutil v0.1.2
 	github.com/container-storage-interface/spec v1.2.0
 	github.com/go-resty/resty v1.12.0 // indirect
-	github.com/inspur-ics/ics-go-sdk v0.0.0-20200216111322-0364b2eeae84
+	github.com/inspur-ics/ics-go-sdk v0.0.0-20200218075912-faf1c7b5d27e
 	github.com/rexray/gocsi v1.1.0
 	golang.org/x/lint v0.0.0-20190313153728-d0100b6bd8b3 // indirect
 	google.golang.org/grpc v1.26.0

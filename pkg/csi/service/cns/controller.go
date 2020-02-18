@@ -263,7 +263,7 @@ func (c *controller) ControllerPublishVolume(ctx context.Context, req *csi.Contr
 
 	diskUUID, err := common.AttachVolumeUtil(ctx, c.manager, node, req.VolumeId)
 	if err != nil {
-		klog.Errorf("ControllerPublishVolume: failed with err %v", err)
+		klog.Errorf("ControllerPublishVolume: failed with err: %v", err)
 	}
 
 	publishInfo := make(map[string]string)
@@ -281,6 +281,25 @@ func (c *controller) ControllerUnpublishVolume(ctx context.Context, req *csi.Con
 	*csi.ControllerUnpublishVolumeResponse, error) {
 
 	klog.V(4).Infof("ControllerUnpublishVolume: called with args %+v", *req)
+	err := common.ValidateControllerUnpublishVolumeRequest(req)
+	if err != nil {
+		msg := fmt.Sprintf("Validation for UnpublishVolume Request: %+v has failed. Error: %v", *req, err)
+		klog.Error(msg)
+		return nil, status.Errorf(codes.Internal, msg)
+	}
+	node, err := c.nodeMgr.GetNodeByName(req.NodeId)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to find VirtualMachine for node:%q. Error: %v", req.NodeId, err)
+		klog.Error(msg)
+		return nil, status.Errorf(codes.Internal, msg)
+	}
+	err = common.DetachVolumeUtil(ctx, c.manager, node, req.VolumeId)
+	if err != nil {
+		msg := fmt.Sprintf("Failed to detach disk: %+q from node: %q err: %+v", req.VolumeId, req.NodeId, err)
+		klog.Error(msg)
+		return nil, status.Errorf(codes.Internal, msg)
+	}
+
 	resp := &csi.ControllerUnpublishVolumeResponse{}
 	return resp, nil
 }

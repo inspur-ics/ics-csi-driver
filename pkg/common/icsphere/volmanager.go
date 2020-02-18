@@ -35,6 +35,8 @@ type VolumeManager interface {
 	DeleteVolume(volumeId string, deleteVolume bool) error
 	// AttachVolume attaches a volume to a virtual machine given the spec.
 	AttachVolume(vm *VirtualMachine, volumeId string) (string, error)
+	// DetachVolume detaches a volume from the virtual machine given the spec.
+	DetachVolume(vm *VirtualMachine, volumeId string) error
 }
 
 var (
@@ -219,4 +221,59 @@ func (m *volumeManager) AttachVolume(vm *VirtualMachine, volumeId string) (strin
 
 	klog.V(5).Infof("Attach volume %s task finished", volumeId)
 	return diskInfo.ScsiID, nil
+}
+
+// DetachVolume detaches a volume from the virtual machine given the spec.
+func (m *volumeManager) DetachVolume(vm *VirtualMachine, volumeId string) error {
+	err := validateManager(m)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err = m.virtualCenter.Connect(ctx)
+	if err != nil {
+		klog.Errorf("Virtual Center Connect failed with err: %+v", err)
+		return err
+	}
+
+	found := false
+	vmInfo := *vm.VirtualMachine
+	for i, disk := range vmInfo.Disks {
+		if disk.ID == volumeId {
+			found = true
+			vmInfo.Disks = append(vmInfo.Disks[:i], vmInfo.Disks[i+1:]...)
+			break
+		}
+	}
+	if !found {
+		errMsg := fmt.Sprintf("Volume %s not found for vm %v", volumeId, vm)
+		klog.Errorf(errMsg)
+		return errors.New(errMsg)
+	}
+
+	vmInfo.VncPasswd = "00000000"
+	klog.V(4).Infof("Detaching volume %s from VM %v", volumeId, vm)
+
+	vmService := icsvm.NewVirtualMachineService(m.virtualCenter.Client)
+	task, err := vmService.SetVM(ctx, vmInfo)
+	if err != nil {
+		klog.Errorf("Failed to detach volume %s from VM %v with err: %+v", volumeId, vm, err)
+		return err
+	}
+
+	klog.V(5).Infof("Detach volume %s task info: %+v", volumeId, *task)
+	taskState, err := GetTaskState(ctx, m.virtualCenter, task)
+	if err != nil {
+		klog.Errorf("Detach volume %s task failed with err: %+v", volumeId, err)
+		return err
+	} else if taskState != "FINISHED" {
+		errMsg := fmt.Sprintf("Detach volume %s task state %s", volumeId, taskState)
+		klog.Errorf(errMsg)
+		return errors.New(errMsg)
+	}
+
+	klog.V(5).Infof("Detach volume %s task finished", volumeId)
+	return nil
 }

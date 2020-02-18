@@ -60,11 +60,20 @@ func AttachVolumeUtil(ctx context.Context, manager *Manager, vm *ics.VirtualMach
 	return diskUUID, nil
 }
 
+// DetachVolumeUtil is the helper function to detach CNS volume from specified vm
+func DetachVolumeUtil(ctx context.Context, manager *Manager, vm *ics.VirtualMachine, volumeId string) error {
+	err := manager.VolumeManager.DetachVolume(vm, volumeId)
+	if err != nil {
+		return err
+	}
+	klog.V(4).Infof("Successfully detached disk %s from vm %s", volumeId, vm.VirtualMachine.Name)
+	return nil
+}
+
 // DeleteVolumeUtil is the helper function to delete CNS volume for given volumeId
 func DeleteVolumeUtil(ctx context.Context, manager *Manager, volumeId string, deleteVolume bool) error {
 	err := manager.VolumeManager.DeleteVolume(volumeId, deleteVolume)
 	if err != nil {
-		klog.Errorf("Failed to delete volume %s with err: %+v", volumeId, err)
 		return err
 	}
 
