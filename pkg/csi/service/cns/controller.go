@@ -23,9 +23,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog"
-	"math/rand"
+	"sort"
 	"strings"
-	"time"
 
 	"ics-csi-driver/pkg/common/config"
 	ics "ics-csi-driver/pkg/common/icsphere"
@@ -186,8 +185,8 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 			return nil, status.Error(codes.InvalidArgument, errMsg)
 		}
 	} else if topologyRequirement != nil {
-		rand.Seed(time.Now().Unix())
-		createVolumeSpec.DatastoreID = sharedDatastores[rand.Intn(len(sharedDatastores))].ID
+		sort.Slice(sharedDatastores, func(i, j int) bool { return sharedDatastores[i].AvailCapacity > sharedDatastores[j].AvailCapacity })
+		createVolumeSpec.DatastoreID = sharedDatastores[0].ID
 	} else {
 		errMsg := fmt.Sprintf("DatastoreID not specified in the storage class. CreateVolumeRequest: %+v", *req)
 		klog.Errorf(errMsg)
