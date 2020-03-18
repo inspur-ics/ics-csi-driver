@@ -24,7 +24,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 
-	ics "ics-csi-driver/pkg/common/icsphere"
+	"ics-csi-driver/pkg/common/ics"
 )
 
 var (

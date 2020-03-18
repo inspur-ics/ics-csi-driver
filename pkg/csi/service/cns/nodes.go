@@ -24,7 +24,7 @@ import (
 	"k8s.io/klog"
 	"strings"
 
-	ics "ics-csi-driver/pkg/common/icsphere"
+	"ics-csi-driver/pkg/common/ics"
 	k8s "ics-csi-driver/pkg/common/kubernetes"
 	cnsnode "ics-csi-driver/pkg/common/node"
 	"ics-csi-driver/pkg/csi/service/common"

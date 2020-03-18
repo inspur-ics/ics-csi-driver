@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package icsphere
+package ics
 
 import (
 	"context"
@@ -50,8 +50,14 @@ func GetVirtualCenterConfig(cfg *config.Config) (*VirtualCenterConfig, error) {
 		Insecure:        cfg.VirtualCenter[host].InsecureFlag,
 		DatacenterPaths: strings.Split(cfg.VirtualCenter[host].Datacenters, ","),
 	}
-	for idx := range vcConfig.DatacenterPaths {
+	for idx := 0; idx < len(vcConfig.DatacenterPaths); {
 		vcConfig.DatacenterPaths[idx] = strings.TrimSpace(vcConfig.DatacenterPaths[idx])
+		if vcConfig.DatacenterPaths[idx] == "" {
+			//delete the empty datacenter elem
+			vcConfig.DatacenterPaths = append(vcConfig.DatacenterPaths[:idx], vcConfig.DatacenterPaths[idx+1:]...)
+		} else {
+			idx++
+		}
 	}
 	return vcConfig, nil
 }

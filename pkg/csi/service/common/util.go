@@ -20,7 +20,7 @@ import (
 	"context"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/inspur-ics/ics-go-sdk/client/types"
-	ics "ics-csi-driver/pkg/common/icsphere"
+	"ics-csi-driver/pkg/common/ics"
 	"k8s.io/klog"
 	"strconv"
 	"strings"

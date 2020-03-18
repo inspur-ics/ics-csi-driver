@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package icsphere
+package ics
 
 import (
 	"context"
@@ -25,8 +25,6 @@ import (
 	"k8s.io/klog"
 	"strconv"
 	"sync"
-	//csictx "github.com/rexray/gocsi/context"
-	//cnsconfig "ics-csi-driver/pkg/common/config"
 )
 
 // VirtualCenter holds details of a virtual center instance.
@@ -87,9 +85,13 @@ func (vc *VirtualCenter) Connect(ctx context.Context) error {
 	return nil
 }
 
+// GetDatacenters returns Datacenters found on the VirtualCenter. If no
+// datacenters are mentioned in the VirtualCenterConfig during registration, all
+// Datacenters for the given VirtualCenter will be returned. If DatacenterPaths
+// is configured in VirtualCenterConfig during registration, only the listed
+// Datacenters are returned.
 func (vc *VirtualCenter) GetDatacenters(ctx context.Context) ([]*Datacenter, error) {
 	var dcs []*Datacenter
-
 	dcService := icsdc.NewDatacenterService(vc.Client)
 	dcList, err := dcService.GetAllDatacenters(ctx)
 	if err != nil {
@@ -97,8 +99,21 @@ func (vc *VirtualCenter) GetDatacenters(ctx context.Context) ([]*Datacenter, err
 	} else {
 		klog.V(5).Infof("successfully get datacenter list for vc: %s\n", vc.Config.Host)
 		for _, dcItem := range dcList {
-			dc := &Datacenter{ID: dcItem.ID, Datacenter: dcItem, VirtualCenterHost: vc.Config.Host}
-			dcs = append(dcs, dc)
+			dcExist := false
+			if len(vc.Config.DatacenterPaths) == 0 {
+				dcExist = true
+			} else {
+				for _, dcPath := range vc.Config.DatacenterPaths {
+					if dcItem.ID == dcPath || dcItem.Name == dcPath {
+						dcExist = true
+						break
+					}
+				}
+			}
+			if dcExist {
+				dc := &Datacenter{ID: dcItem.ID, Datacenter: dcItem, VirtualCenterHost: vc.Config.Host}
+				dcs = append(dcs, dc)
+			}
 		}
 	}
 	return dcs, err

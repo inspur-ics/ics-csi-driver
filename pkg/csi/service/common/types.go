@@ -20,7 +20,7 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 
 	"ics-csi-driver/pkg/common/config"
-	ics "ics-csi-driver/pkg/common/icsphere"
+	"ics-csi-driver/pkg/common/ics"
 )
 
 var (

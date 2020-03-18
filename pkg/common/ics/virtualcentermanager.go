@@ -14,14 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package icsphere
+package ics
 
 import (
-	//"context"
 	"errors"
-	"sync"
-
 	"k8s.io/klog"
+	"sync"
 )
 
 var (

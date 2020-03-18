@@ -27,7 +27,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"ics-csi-driver/pkg/common/config"
-	"ics-csi-driver/pkg/common/icsphere"
+	"ics-csi-driver/pkg/common/ics"
 	"ics-csi-driver/pkg/csi/service/common"
 	csitypes "ics-csi-driver/pkg/csi/types"
 	"io/ioutil"
@@ -486,12 +486,12 @@ func (s *service) NodeGetInfo(
 	topology := &csi.Topology{}
 
 	if cfg.Labels.Zone != "" && cfg.Labels.Region != "" {
-		vcenterconfig, err := icsphere.GetVirtualCenterConfig(cfg)
+		vcenterconfig, err := ics.GetVirtualCenterConfig(cfg)
 		if err != nil {
 			klog.Errorf("Failed to get VirtualCenterConfig from ics config. err=%v", err)
 			return nil, status.Errorf(codes.Internal, err.Error())
 		}
-		vcManager := icsphere.GetVirtualCenterManager()
+		vcManager := ics.GetVirtualCenterManager()
 		vcenter, err := vcManager.RegisterVirtualCenter(vcenterconfig)
 		if err != nil {
 			klog.Errorf("Failed to register vcenter with virtualCenterManager.")
@@ -510,7 +510,7 @@ func (s *service) NodeGetInfo(
 			return nil, status.Errorf(codes.Internal, err.Error())
 		}
 		klog.V(4).Infof("Successfully retrieved uuid:%s  from the node: %s", uuid, nodeID)
-		nodeVM, err := icsphere.GetVirtualMachineByUUID(nodeID, uuid, false)
+		nodeVM, err := ics.GetVirtualMachineByUUID(nodeID, uuid, false)
 		if err != nil || nodeVM == nil {
 			klog.Errorf("Failed to get nodeVM for uuid: %s name: %s. err: %+v", uuid, nodeID, err)
 			return nil, status.Errorf(codes.Internal, err.Error())

@@ -14,16 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package icsphere
+package ics
 
 import (
 	"context"
 	"fmt"
-	//"strings"
 	"github.com/inspur-ics/ics-go-sdk/client/types"
 	icsdc "github.com/inspur-ics/ics-go-sdk/datacenter"
 	"k8s.io/klog"
-	//"strconv"
 )
 
 // DatastoreInfoProperty refers to the property name info for the Datastore

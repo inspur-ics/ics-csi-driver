@@ -27,7 +27,7 @@ import (
 	"strings"
 
 	"ics-csi-driver/pkg/common/config"
-	ics "ics-csi-driver/pkg/common/icsphere"
+	"ics-csi-driver/pkg/common/ics"
 	"ics-csi-driver/pkg/csi/service/common"
 	csitypes "ics-csi-driver/pkg/csi/types"
 )
