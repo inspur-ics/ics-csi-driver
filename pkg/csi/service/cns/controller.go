@@ -114,23 +114,22 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 	}
 	volSizeGB := int64(common.RoundUpSize(volSizeBytes, common.GbInBytes))
 
-	var datastoreID string
+	var datastoreReq string
 	var fsType string
 
 	// Support case insensitive parameters
 	for paramName := range req.Parameters {
 		param := strings.ToLower(paramName)
 		if param == common.AttributeDatastoreURL {
-			datastoreID = req.Parameters[paramName]
+			datastoreReq = req.Parameters[paramName]
 		} else if param == common.AttributeFsType {
 			fsType = req.Parameters[common.AttributeFsType]
 		}
 	}
 
 	var createVolumeSpec = common.CreateVolumeSpec{
-		CapacityGB:  volSizeGB,
-		Name:        req.Name,
-		DatastoreID: datastoreID,
+		CapacityGB: volSizeGB,
+		Name:       req.Name,
 	}
 
 	var err error
@@ -164,11 +163,12 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 		}
 	}
 
-	if createVolumeSpec.DatastoreID != "" {
+	if datastoreReq != "" {
 		// Check datastore ID specified in the storageclass is accessible
 		isDataStoreAccessible := false
 		for _, sharedDatastore := range sharedDatastores {
-			if sharedDatastore.ID == createVolumeSpec.DatastoreID {
+			if sharedDatastore.ID == datastoreReq || sharedDatastore.Name == datastoreReq {
+				createVolumeSpec.DatastoreID = sharedDatastore.ID
 				isDataStoreAccessible = true
 				break
 			}
@@ -176,10 +176,10 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 		if !isDataStoreAccessible {
 			var errMsg string
 			if topologyRequirement != nil {
-				errMsg = fmt.Sprintf("DatastoreID: %s specified in the storage class is not accessible in the topology:[+%v]",
-					createVolumeSpec.DatastoreID, topologyRequirement)
+				errMsg = fmt.Sprintf("Datastore: %s specified in the storage class is not accessible in the topology:[+%v]",
+					datastoreReq, topologyRequirement)
 			} else {
-				errMsg = fmt.Sprintf("DatastoreID: %s specified in the storage class is not accessible", createVolumeSpec.DatastoreID)
+				errMsg = fmt.Sprintf("Datastore: %s specified in the storage class is not accessible", datastoreReq)
 			}
 			klog.Errorf(errMsg)
 			return nil, status.Error(codes.InvalidArgument, errMsg)
@@ -188,7 +188,7 @@ func (c *controller) CreateVolume(ctx context.Context, req *csi.CreateVolumeRequ
 		sort.Slice(sharedDatastores, func(i, j int) bool { return sharedDatastores[i].AvailCapacity > sharedDatastores[j].AvailCapacity })
 		createVolumeSpec.DatastoreID = sharedDatastores[0].ID
 	} else {
-		errMsg := fmt.Sprintf("DatastoreID not specified in the storage class. CreateVolumeRequest: %+v", *req)
+		errMsg := fmt.Sprintf("Datastore not specified in the storage class. CreateVolumeRequest: %+v", *req)
 		klog.Errorf(errMsg)
 		return nil, status.Error(codes.InvalidArgument, errMsg)
 	}
