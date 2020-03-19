@@ -3,7 +3,7 @@ all: build
 .PHONY: build
 
 VERSION ?= $(shell git describe --always)
-IMAGE ?= ics-csi-driver
+IMAGE ?= ics-csi-syncer
 IMAGE_TAG ?= $(IMAGE):$(VERSION)
 IMAGE_TAR ?= /tmp/$(IMAGE_TAG).tar
 

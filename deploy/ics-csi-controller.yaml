@@ -99,6 +99,20 @@ spec:
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
+        - name: ics-csi-syncer
+          image: ics-csi-syncer:latest
+          args:
+            - "--v=5"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: FULL_SYNC_INTERVAL_MINUTES
+              value: "3"
+            - name: ICSPHERE_CSI_CONFIG
+              value: "/etc/ics/icsphere-csi.conf"
+          volumeMounts:
+            - mountPath: /etc/ics
+              name: ics-config-volume
+              readOnly: true
       volumes:
         - name: ics-config-volume
           secret:

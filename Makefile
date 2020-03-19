@@ -71,6 +71,7 @@ GOARCH ?= amd64
 
 LDFLAGS := $(shell cat hack/make/ldflags.txt)
 LDFLAGS_CSI := $(LDFLAGS) -X "$(MOD_NAME)/pkg/csi/service.version=$(VERSION)"
+LDFLAGS_SYNCER := $(LDFLAGS)
 
 # The CSI binary.
 CSI_BIN_NAME := icsphere-csi
@@ -86,8 +87,22 @@ $(CSI_BIN): $(CSI_BIN_SRCS)
 	@touch $@
 	@cp -f  $@ ./images/csi/$(CSI_BIN_NAME)
 
+# The Syncer binary.
+SYNCER_BIN_NAME := syncer
+SYNCER_BIN := $(BIN_OUT)/$(SYNCER_BIN_NAME).$(GOOS)_$(GOARCH)
+build-syncer: $(SYNCER_BIN)
+ifndef SYNCER_BIN_SRCS
+SYNCER_BIN_SRCS := cmd/$(SYNCER_BIN_NAME)/main.go go.mod go.sum
+SYNCER_BIN_SRCS += $(addsuffix /*.go,$(shell go list -f '{{ join .Deps "\n" }}' ./cmd/$(SYNCER_BIN_NAME) | grep $(MOD_NAME) | sed 's~$(MOD_NAME)~.~'))
+export SYNCER_BIN_SRCS
+endif
+$(SYNCER_BIN): $(SYNCER_BIN_SRCS)
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags '$(LDFLAGS_SYNCER)' -o $(abspath $@) $<
+	@touch $@
+	@cp -f  $@ ./images/syncer/$(SYNCER_BIN_NAME)
+
 # The default build target.
-build build-bins: $(CSI_BIN)
+build build-bins: $(CSI_BIN) $(SYNCER_BIN)
 
 ################################################################################
 ##                                 CLEAN                                      ##
@@ -95,9 +110,9 @@ build build-bins: $(CSI_BIN)
 .PHONY: clean
 clean:
 	@rm -f Dockerfile*
-	rm -f $(CSI_BIN) icsphere-csi-*.tar.gz icsphere-csi-*.zip \
-		image-*.tar image-*.d $(DIST_OUT)/* $(BIN_OUT)/* images/csi/$(CSI_BIN_NAME)
-	GO111MODULE=off go clean -i -x . ./cmd/$(CSI_BIN_NAME)
+	rm -f $(CSI_BIN) $(SYNCER_BIN) images/csi/$(CSI_BIN_NAME) images/syncer/$(SYNCER_BIN_NAME) \
+		$(DIST_OUT)/* $(BIN_OUT)/*
+#	GO111MODULE=off go clean -i -x . ./cmd/$(CSI_BIN_NAME) ./cmd/$(SYNCER_BIN_NAME)
 .PHONY: clean-d
 clean-d:
 	@find . -name "*.d" -type f -delete

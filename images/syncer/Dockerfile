@@ -3,7 +3,7 @@ ARG BASE_IMAGE=ubuntu:18.04
 FROM ${BASE_IMAGE}
 LABEL "maintainer" "ics-dev-team"
 
-COPY ./icsphere-csi /bin/incloudsphere-csi
+COPY ./syncer /bin/incloudsphere-syncer
 
-ENTRYPOINT ["/bin/incloudsphere-csi"]
+ENTRYPOINT ["/bin/incloudsphere-syncer"]
 
