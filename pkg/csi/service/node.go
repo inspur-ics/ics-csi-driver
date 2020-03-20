@@ -29,7 +29,6 @@ import (
 	"ics-csi-driver/pkg/common/config"
 	"ics-csi-driver/pkg/common/ics"
 	"ics-csi-driver/pkg/csi/service/common"
-	csitypes "ics-csi-driver/pkg/csi/types"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -524,8 +523,8 @@ func (s *service) NodeGetInfo(
 		klog.V(4).Infof("zone: [%s], region: [%s], Node VM: [%s]", zone, region, nodeID)
 		if zone != "" && region != "" {
 			accessibleTopology = make(map[string]string)
-			accessibleTopology[csitypes.LabelRegionFailureDomain] = region
-			accessibleTopology[csitypes.LabelZoneFailureDomain] = zone
+			accessibleTopology[common.LabelRegionFailureDomain] = region
+			accessibleTopology[common.LabelZoneFailureDomain] = zone
 		}
 	}
 

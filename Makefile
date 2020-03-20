@@ -110,8 +110,7 @@ build build-bins: $(CSI_BIN) $(SYNCER_BIN)
 .PHONY: clean
 clean:
 	@rm -f Dockerfile*
-	rm -f $(CSI_BIN) $(SYNCER_BIN) images/csi/$(CSI_BIN_NAME) images/syncer/$(SYNCER_BIN_NAME) \
-		$(DIST_OUT)/* $(BIN_OUT)/*
+	rm -f $(CSI_BIN) $(SYNCER_BIN) images/csi/$(CSI_BIN_NAME) images/syncer/$(SYNCER_BIN_NAME) $(BIN_OUT)/*
 #	GO111MODULE=off go clean -i -x . ./cmd/$(CSI_BIN_NAME) ./cmd/$(SYNCER_BIN_NAME)
 .PHONY: clean-d
 clean-d:

@@ -28,7 +28,6 @@ import (
 	k8s "ics-csi-driver/pkg/common/kubernetes"
 	cnsnode "ics-csi-driver/pkg/common/node"
 	"ics-csi-driver/pkg/csi/service/common"
-	csitypes "ics-csi-driver/pkg/csi/types"
 )
 
 // Nodes is the type comprising cns node manager and kubernetes informer
@@ -154,8 +153,8 @@ func (nodes *Nodes) GetSharedDatastoresInTopology(ctx context.Context, topologyR
 		datastoreTopologyMap := make(map[string][]map[string]string)
 		for _, topology := range topologyArr {
 			segments := topology.GetSegments()
-			zone := segments[csitypes.LabelZoneFailureDomain]
-			region := segments[csitypes.LabelRegionFailureDomain]
+			zone := segments[common.LabelZoneFailureDomain]
+			region := segments[common.LabelRegionFailureDomain]
 			klog.V(4).Infof("Getting list of nodeVMs for zone [%s] and region [%s]", zone, region)
 			nodeVMsInZoneRegion, err := getNodesInZoneRegion(zone, region)
 			if err != nil {
@@ -172,10 +171,10 @@ func (nodes *Nodes) GetSharedDatastoresInTopology(ctx context.Context, topologyR
 			for _, datastore := range sharedDatastoresInZoneRegion {
 				accessibleTopology := make(map[string]string)
 				if zone != "" {
-					accessibleTopology[csitypes.LabelZoneFailureDomain] = zone
+					accessibleTopology[common.LabelZoneFailureDomain] = zone
 				}
 				if region != "" {
-					accessibleTopology[csitypes.LabelRegionFailureDomain] = region
+					accessibleTopology[common.LabelRegionFailureDomain] = region
 				}
 				datastoreTopologyMap[datastore.ID] = append(datastoreTopologyMap[datastore.ID], accessibleTopology)
 			}

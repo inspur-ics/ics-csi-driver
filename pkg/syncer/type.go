@@ -92,20 +92,3 @@ type MetadataSyncInformer struct {
 	pvLister             corelisters.PersistentVolumeLister
 	pvcLister            corelisters.PersistentVolumeClaimLister
 }
-
-type CnsVolumeCreateSpec struct {
-	Name       string
-	VolumeType string
-	//Datastores           []types.ManagedObjectReference
-	//Metadata             CnsVolumeMetadata
-	//BackingObjectDetails BaseCnsBackingObjectDetails
-}
-
-type CnsVolumeId struct {
-	Id string
-}
-
-type CnsVolumeMetadataUpdateSpec struct {
-	VolumeId CnsVolumeId
-	//Metadata CnsVolumeMetadata
-}

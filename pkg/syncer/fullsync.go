@@ -17,17 +17,18 @@ limitations under the License.
 package syncer
 
 import (
-	"sync"
-
-	//"github.com/davecgh/go-spew/spew"
+	"github.com/davecgh/go-spew/spew"
+	"ics-csi-driver/pkg/common/ics"
+	cnstypes "ics-csi-driver/pkg/common/types"
+	"ics-csi-driver/pkg/csi/service"
+	"ics-csi-driver/pkg/csi/service/common"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
-
-	//"ics-csi-driver/pkg/common/ics"
-	"ics-csi-driver/pkg/csi/service"
+	"reflect"
+	"sync"
 )
 
 // triggerFullSync triggers full sync
@@ -44,12 +45,32 @@ func triggerFullSync(k8sclient clientset.Interface, metadataSyncer *MetadataSync
 	// pvToPVCMap maps pv name to corresponding PVC
 	// pvcToPodMap maps pvc to the mounted Pod
 	pvToPVCMap, pvcToPodMap := buildPVCMapPodMap(k8sclient, k8sPVs)
-	klog.V(4).Infof("FullSync: pvToPVCMap %v", pvToPVCMap)
-	klog.V(4).Infof("FullSync: pvcToPodMap %v", pvcToPodMap)
+	klog.V(7).Infof("FullSync: pvToPVCMap %v", pvToPVCMap)
+	klog.V(7).Infof("FullSync: pvcToPodMap %v", pvcToPodMap)
 
-	var createSpecArray []CnsVolumeCreateSpec
-	var volToBeDeleted []CnsVolumeId
-	var updateSpecArray []CnsVolumeMetadataUpdateSpec
+	//Call QueryAllVolume to get container volumes by cluster ID
+	//queryAllResult, err := volumes.GetManager(metadataSyncer.vcenter).QueryAllVolume(queryFilter, querySelection)
+	//cnsVolumeArray := queryAllResult.Volumes
+	var cnsVolumeArray []cnstypes.CnsVolume
+
+	// Initialize CNS volume maps
+	cnsVolumeToPodMap = make(map[string]string)
+	cnsVolumeToPvcMap = make(map[string]string)
+	cnsVolumeToEntityNamespaceMap = make(map[string]string)
+
+	// Map K8s PV's to the operation that needs to be performed on them
+	k8sPVsMap := buildVolumeMap(k8sPVs, cnsVolumeArray, pvToPVCMap, pvcToPodMap, metadataSyncer)
+	klog.V(4).Infof("FullSync: k8sPVMap %v", k8sPVsMap)
+
+	// Identify volumes to be created, updated and deleted
+	volToBeCreated, volToBeUpdated, volWithPvcEntryToBeDeleted, volWithPodEntryToBeDeleted := identifyVolumesToBeCreatedUpdated(k8sPVs, k8sPVsMap)
+	volToBeDeleted := identifyVolumesToBeDeleted(cnsVolumeArray, k8sPVsMap)
+
+	// Construct the cns spec for create and update operations
+	createSpecArray := constructCnsCreateSpec(volToBeCreated, pvToPVCMap, pvcToPodMap, metadataSyncer)
+	updateSpecArray := constructCnsUpdateSpec(volToBeUpdated, pvToPVCMap, pvcToPodMap, metadataSyncer)
+	updateSpecArray = append(updateSpecArray, constructCnsUpdateSpecWithPVCToBeDeleted(volWithPvcEntryToBeDeleted, metadataSyncer)...)
+	updateSpecArray = append(updateSpecArray, constructCnsUpdateSpecWithPodToBeDeleted(volWithPodEntryToBeDeleted, metadataSyncer)...)
 
 	wg := sync.WaitGroup{}
 	wg.Add(3)
@@ -59,7 +80,7 @@ func triggerFullSync(k8sclient clientset.Interface, metadataSyncer *MetadataSync
 	go fullSyncUpdateVolumes(updateSpecArray, metadataSyncer, &wg)
 	wg.Wait()
 
-	//cleanupCnsMaps(k8sPVsMap)
+	cleanupCnsMaps(k8sPVsMap)
 	klog.V(4).Infof("FullSync: cnsDeletionMap at end of cycle: %v", cnsDeletionMap)
 	klog.V(4).Infof("FullSync: cnsCreationMap at end of cycle: %v", cnsCreationMap)
 }
@@ -129,7 +150,7 @@ func buildPVCMapPodMap(k8sclient clientset.Interface, pvList []*v1.PersistentVol
 // fullSyncCreateVolumes create volumes with given array of createSpec
 // Before creating a volume, all current K8s volumes are retrieved
 // If the volume is successfully created, it is removed from cnsCreationMap
-func fullSyncCreateVolumes(createSpecArray []CnsVolumeCreateSpec, metadataSyncer *MetadataSyncInformer, k8sclient clientset.Interface, wg *sync.WaitGroup) {
+func fullSyncCreateVolumes(createSpecArray []cnstypes.CnsVolumeCreateSpec, metadataSyncer *MetadataSyncInformer, k8sclient clientset.Interface, wg *sync.WaitGroup) {
 	defer wg.Done()
 	currentK8sPVMap := make(map[string]bool)
 	volumeOperationsLock.Lock()
@@ -145,18 +166,29 @@ func fullSyncCreateVolumes(createSpecArray []CnsVolumeCreateSpec, metadataSyncer
 		currentK8sPVMap[pv.Spec.CSI.VolumeHandle] = true
 	}
 
-	//for _, createSpec := range createSpecArray {
-	// Create volume if present in currentK8sPVMap
-
-	//}
+	for _, createSpec := range createSpecArray {
+		// Create volume if present in currentK8sPVMap
+		if createSpec.BackingObjectDetails.(*cnstypes.CnsBlockBackingDetails) == nil {
+			continue
+		}
+		if _, existsInK8s := currentK8sPVMap[createSpec.BackingObjectDetails.(*cnstypes.CnsBlockBackingDetails).BackingDiskId]; existsInK8s {
+			klog.V(4).Infof("FullSync: Calling CreateVolume for volume %s with id %s and create spec %+v", createSpec.Name, createSpec.BackingObjectDetails.(*cnstypes.CnsBlockBackingDetails).BackingDiskId, spew.Sdump(createSpec))
+			//_, err := ics.GetVolumeManager(metadataSyncer.vcenter).CreateVolume(&createSpec)
+			//if err != nil {
+			//	klog.Warningf("FullSync: Failed to create disk %s with id %s. Err: %+v", createSpec.Name, createSpec.BackingObjectDetails.(*cnstypes.CnsBlockBackingDetails).BackingDiskId, err)
+			//	continue
+			//}
+		}
+		delete(cnsCreationMap, (createSpec.BackingObjectDetails).(*cnstypes.CnsBlockBackingDetails).BackingDiskId)
+	}
 }
 
 // fullSyncDeleteVolumes delete volumes with given array of volumeId
 // Before deleting a volume, all current K8s volumes are retrieved
 // If the volume is successfully deleted, it is removed from cnsDeletionMap
-func fullSyncDeleteVolumes(volumeIDDeleteArray []CnsVolumeId, metadataSyncer *MetadataSyncInformer, k8sclient clientset.Interface, wg *sync.WaitGroup) {
+func fullSyncDeleteVolumes(volumeIDDeleteArray []string, metadataSyncer *MetadataSyncInformer, k8sclient clientset.Interface, wg *sync.WaitGroup) {
 	defer wg.Done()
-	//deleteDisk := false
+	deleteDisk := false
 	currentK8sPVMap := make(map[string]bool)
 	volumeOperationsLock.Lock()
 	defer volumeOperationsLock.Unlock()
@@ -171,18 +203,313 @@ func fullSyncDeleteVolumes(volumeIDDeleteArray []CnsVolumeId, metadataSyncer *Me
 		currentK8sPVMap[pv.Spec.CSI.VolumeHandle] = true
 	}
 
-	//for _, volID := range volumeIDDeleteArray {
-	// Delete volume if not present in currentK8sPVMap
-
-	//}
+	for _, volID := range volumeIDDeleteArray {
+		// Delete volume if not present in currentK8sPVMap
+		if _, existsInK8s := currentK8sPVMap[volID]; !existsInK8s {
+			klog.V(4).Infof("FullSync: Calling DeleteVolume for volume %s with delete disk %v", volID, deleteDisk)
+			err := ics.GetVolumeManager(metadataSyncer.vcenter).DeleteVolume(volID, deleteDisk)
+			if err != nil {
+				klog.Warningf("FullSync: Failed to delete volume %s with error %+v", volID, err)
+				continue
+			}
+		}
+		delete(cnsDeletionMap, volID)
+	}
 }
 
 // fullSyncUpdateVolumes update metadata for volumes with given array of createSpec
-func fullSyncUpdateVolumes(updateSpecArray []CnsVolumeMetadataUpdateSpec, metadataSyncer *MetadataSyncInformer, wg *sync.WaitGroup) {
+func fullSyncUpdateVolumes(updateSpecArray []cnstypes.CnsVolumeMetadataUpdateSpec, metadataSyncer *MetadataSyncInformer, wg *sync.WaitGroup) {
 	defer wg.Done()
-	//for _, updateSpec := range updateSpecArray {
-	//
-	//}
+	for _, updateSpec := range updateSpecArray {
+		klog.V(4).Infof("FullSync: Calling UpdateVolumeMetadata for volume %s with updateSpec: %+v", updateSpec.VolumeId, spew.Sdump(updateSpec))
+		//if err := ics.GetVolumeManager(metadataSyncer.vcenter).UpdateVolumeMetadata(&updateSpec); err != nil {
+		//	klog.Warningf("FullSync:UpdateVolumeMetadata failed with err %v", err)
+		//}
+	}
+}
+
+// buildCnsUpdateMetadataList build metadata list for given PV
+// metadata list may include PV metadata, PVC metadata and POD metadata
+func buildCnsUpdateMetadataList(pv *v1.PersistentVolume, pvToPVCMap pvcMap, pvcToPodMap podMap) []cnstypes.BaseCnsEntityMetadata {
+	var metadataList []cnstypes.BaseCnsEntityMetadata
+
+	// get pv metadata
+	pvMetadata := getCnsKubernetesEntityMetaData(pv.Name, pv.GetLabels(), false, string(cnstypes.CnsKubernetesEntityTypePV), pv.Namespace)
+	metadataList = append(metadataList, cnstypes.BaseCnsEntityMetadata(pvMetadata))
+	if pvc, ok := pvToPVCMap[pv.Name]; ok {
+		// get pvc metadata
+		pvcMetadata := getCnsKubernetesEntityMetaData(pvc.Name, pvc.GetLabels(), false, string(cnstypes.CnsKubernetesEntityTypePVC), pvc.Namespace)
+		metadataList = append(metadataList, cnstypes.BaseCnsEntityMetadata(pvcMetadata))
+
+		key := pvc.Namespace + "/" + pvc.Name
+		if pod, ok := pvcToPodMap[key]; ok {
+			// get pod metadata
+			podMetadata := getCnsKubernetesEntityMetaData(pod.Name, nil, false, string(cnstypes.CnsKubernetesEntityTypePOD), pod.Namespace)
+			metadataList = append(metadataList, cnstypes.BaseCnsEntityMetadata(podMetadata))
+		}
+	}
+	klog.V(4).Infof("FullSync: buildMetadataList=%+v \n", spew.Sdump(metadataList))
+	return metadataList
+}
+
+// buildVolumeMap build k8sPVMap which maps volume id to a string "Create"/"Update" to indicate the PV need to be
+// created/updated in CNS cache
+// A volume mapped to an empty string implies either no operation has to be performed or that the volume will be
+// deleted
+func buildVolumeMap(pvList []*v1.PersistentVolume, cnsVolumeList []cnstypes.CnsVolume, pvToPVCMap pvcMap, pvcToPodMap podMap, metadataSyncer *MetadataSyncInformer) map[string]string {
+	k8sPVMap := make(map[string]string)
+	cnsVolumeMap := make(map[string]bool)
+
+	for _, vol := range cnsVolumeList {
+		cnsVolumeMap[vol.VolumeId] = true
+	}
+	for _, pv := range pvList {
+		k8sPVMap[pv.Spec.CSI.VolumeHandle] = ""
+		if cnsVolumeMap[pv.Spec.CSI.VolumeHandle] {
+			// PV exist in both K8S and CNS cache, check metadata has been changed or not
+			/*
+				queryResult, err := volumes.GetManager(metadataSyncer.vcenter).QueryVolume(pv.Spec.CSI.VolumeHandle)
+				if err == nil && queryResult != nil && len(queryResult.Volumes) > 0 {
+					if &queryResult.Volumes[0].Metadata != nil {
+						cnsMetadata := queryResult.Volumes[0].Metadata.EntityMetadata
+						metadataList := buildCnsUpdateMetadataList(pv, pvToPVCMap, pvcToPodMap)
+						k8sPVMap[pv.Spec.CSI.VolumeHandle] = getCnsUpdateOperationType(metadataList, cnsMetadata, pv.Name)
+					} else {
+						// metadata does not exist in CNS cache even the volume has an entry in CNS cache
+						klog.Warningf("FullSync: No metadata found for volume %v", pv.Spec.CSI.VolumeHandle)
+						k8sPVMap[pv.Spec.CSI.VolumeHandle] = updateVolumeOperation
+					}
+				}
+			*/
+		} else {
+			// PV exist in K8S but not in CNS cache, need to create
+			if _, existsInCnsCreationMap := cnsCreationMap[pv.Spec.CSI.VolumeHandle]; existsInCnsCreationMap {
+				k8sPVMap[pv.Spec.CSI.VolumeHandle] = createVolumeOperation
+			} else {
+				cnsCreationMap[pv.Spec.CSI.VolumeHandle] = true
+			}
+		}
+	}
+	return k8sPVMap
+}
+
+// identifyVolumesToBeCreatedUpdated return list of PV need to be created and updated
+// volumes to be updated can be of three types -
+// 	1. volumes whose existing metadata needs to be updated/created
+//  2. volumes whose existing PVC and Pod metadata needs to be deleted
+// 	3. volumes whose existing Pod metadata needs to be deleted
+func identifyVolumesToBeCreatedUpdated(pvList []*v1.PersistentVolume, k8sPVMap map[string]string) ([]*v1.PersistentVolume, []*v1.PersistentVolume, []*v1.PersistentVolume, []*v1.PersistentVolume) {
+	pvToBeCreated := []*v1.PersistentVolume{}
+	pvToBeUpdated := []*v1.PersistentVolume{}
+	pvcToBeDeleted := []*v1.PersistentVolume{}
+	podToBeDeleted := []*v1.PersistentVolume{}
+	for _, pv := range pvList {
+		switch k8sPVMap[pv.Spec.CSI.VolumeHandle] {
+		case createVolumeOperation:
+			klog.V(4).Infof("FullSync: Volume with id %s added to volume create list as it was present in cnsCreationMap across two fullsync cycles", pv.Spec.CSI.VolumeHandle)
+			pvToBeCreated = append(pvToBeCreated, pv)
+		case updateVolumeOperation:
+			klog.V(4).Infof("FullSync: Volume with id %s added to volume update list", pv.Spec.CSI.VolumeHandle)
+			pvToBeUpdated = append(pvToBeUpdated, pv)
+		case updateVolumeWithDeleteClaimOperation:
+			klog.V(4).Infof("FullSync: Volume with id %s and claim %s added to volume claim delete list", pv.Spec.CSI.VolumeHandle, cnsVolumeToPvcMap[pv.Name])
+			pvcToBeDeleted = append(pvcToBeDeleted, pv)
+		case updateVolumeWithDeletePodOperation:
+			klog.V(4).Infof("FullSync: Volume with id %s and pod name %s added to volume pod delete list", pv.Spec.CSI.VolumeHandle, cnsVolumeToPodMap[pv.Name])
+			podToBeDeleted = append(podToBeDeleted, pv)
+		}
+	}
+	return pvToBeCreated, pvToBeUpdated, pvcToBeDeleted, podToBeDeleted
+}
+
+// identifyVolumesToBeDeleted return list of volumeId's that need to be deleted
+// A volumeId is added to this list only if it was present in cnsDeletionMap across two
+// cycles of full sync
+func identifyVolumesToBeDeleted(cnsVolumeList []cnstypes.CnsVolume, k8sPVMap map[string]string) []string {
+	var volToBeDeleted []string
+	for _, vol := range cnsVolumeList {
+		if _, existsInK8s := k8sPVMap[vol.VolumeId]; !existsInK8s {
+			if _, existsInCnsDeletionMap := cnsDeletionMap[vol.VolumeId]; existsInCnsDeletionMap {
+				// Volume does not exist in K8s across two fullsync cycles - add to delete list
+				klog.V(4).Infof("FullSync: Volume with id %s added to delete list as it was present in cnsDeletionMap across two fullsync cycles", vol.VolumeId)
+				volToBeDeleted = append(volToBeDeleted, vol.VolumeId)
+			} else {
+				// Add to cnsDeletionMap
+				klog.V(4).Infof("Volume with id %s added to cnsDeletionMap", vol.VolumeId)
+				cnsDeletionMap[vol.VolumeId] = true
+			}
+		}
+	}
+	return volToBeDeleted
+}
+
+// constructCnsCreateSpec construct CnsVolumeCreateSpec for given list of PVs
+func constructCnsCreateSpec(pvList []*v1.PersistentVolume, pvToPVCMap pvcMap, pvcToPodMap podMap, metadataSyncer *MetadataSyncInformer) []cnstypes.CnsVolumeCreateSpec {
+	var createSpecArray []cnstypes.CnsVolumeCreateSpec
+	for _, pv := range pvList {
+		// Create new metadata spec
+		metadataList := buildCnsUpdateMetadataList(pv, pvToPVCMap, pvcToPodMap)
+		// volume exist in K8S, but not in CNS cache, need to create this volume
+		createSpec := cnstypes.CnsVolumeCreateSpec{
+			Name:       pv.Name,
+			VolumeType: common.BlockVolumeType,
+			Metadata: cnstypes.CnsVolumeMetadata{
+				ContainerCluster: getContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
+				EntityMetadata:   metadataList,
+			},
+			BackingObjectDetails: &cnstypes.CnsBlockBackingDetails{
+				CnsBackingObjectDetails: cnstypes.CnsBackingObjectDetails{},
+				BackingDiskId:           pv.Spec.CSI.VolumeHandle,
+			},
+		}
+		klog.V(4).Infof("FullSync: volume %v is not in CNS cache", pv.Spec.CSI.VolumeHandle)
+		createSpecArray = append(createSpecArray, createSpec)
+	}
+	return createSpecArray
+}
+
+// constructCnsUpdateSpec construct CnsVolumeMetadataUpdateSpec for given list of PVs
+func constructCnsUpdateSpec(pvUpdateList []*v1.PersistentVolume, pvToPVCMap pvcMap, pvcToPodMap podMap, metadataSyncer *MetadataSyncInformer) []cnstypes.CnsVolumeMetadataUpdateSpec {
+	var updateSpecArray []cnstypes.CnsVolumeMetadataUpdateSpec
+	for _, pv := range pvUpdateList {
+		// Create new metadata spec with delete flag false
+		metadataList := buildCnsUpdateMetadataList(pv, pvToPVCMap, pvcToPodMap)
+		// volume exist in K8S and CNS cache, but metadata is different, need to update this volume
+		updateSpec := getCnsVolumeMetadataUpdateSpec(pv.Spec.CSI.VolumeHandle, metadataList, metadataSyncer)
+		updateSpecArray = append(updateSpecArray, *updateSpec)
+		klog.V(4).Infof("FullSync: constructCnsUpdateSpec to update metadata for volume %s with delete flag false", pv.Spec.CSI.VolumeHandle)
+	}
+
+	return updateSpecArray
+}
+
+// constructCnsUpdateSpecWithPVCToBeDeleted constructs CnsVolumeMetadataUpdateSpec for given list of PVs
+// List of PVs have PVC and/or Pod entries in CNS that need to be deleted
+func constructCnsUpdateSpecWithPVCToBeDeleted(pvUpdateList []*v1.PersistentVolume, metadataSyncer *MetadataSyncInformer) []cnstypes.CnsVolumeMetadataUpdateSpec {
+	var updateSpecArray []cnstypes.CnsVolumeMetadataUpdateSpec
+
+	for _, pv := range pvUpdateList {
+		updateSpec := buildCnsMetadataSpecMarkedForDelete(pv, updateVolumeWithDeleteClaimOperation)
+		// volume exist in K8S and CNS cache, but PVC metadata does not exist in K8S
+		// need to delete PVC entries for this volume
+		updateSpec.Metadata.ContainerCluster = getContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User)
+		updateSpecArray = append(updateSpecArray, updateSpec)
+		klog.V(4).Infof("FullSync: constructCnsUpdateSpecWithPVCToBeDeleted to update metadata for volume %s with delete flag true", pv.Spec.CSI.VolumeHandle)
+	}
+	return updateSpecArray
+}
+
+// constructCnsUpdateSpecWithPodToBeDeleted constructs CnsVolumeMetadataUpdateSpec for given list of PVs
+// List of PVs have Pod entries in CNS that need to be deleted
+func constructCnsUpdateSpecWithPodToBeDeleted(pvUpdateList []*v1.PersistentVolume, metadataSyncer *MetadataSyncInformer) []cnstypes.CnsVolumeMetadataUpdateSpec {
+	var updateSpecArray []cnstypes.CnsVolumeMetadataUpdateSpec
+
+	for _, pv := range pvUpdateList {
+		updateSpec := buildCnsMetadataSpecMarkedForDelete(pv, updateVolumeWithDeletePodOperation)
+		// volume exist in K8S and CNS cache, but Pod metadata does not exist in K8S
+		// need to delete Pod entries for this volume
+		updateSpec.Metadata.ContainerCluster = getContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User)
+		updateSpecArray = append(updateSpecArray, updateSpec)
+		klog.V(4).Infof("FullSync: constructCnsUpdateSpecWithPodToBeDeleted to update metadata for volume %s with delete flag true", pv.Spec.CSI.VolumeHandle)
+	}
+
+	return updateSpecArray
+}
+
+// GetLabelsMapFromKeyValue creates a  map object from given parameter
+func getLabelsMapFromKeyValue(labels []cnstypes.KeyValue) map[string]string {
+	labelsMap := make(map[string]string)
+	for _, label := range labels {
+		labelsMap[label.Key] = label.Value
+	}
+	return labelsMap
+}
+
+// CompareKubernetesMetadata compares the whole cnskubernetesEntityMetadata from two given parameters
+func compareKubernetesMetadata(pvMetaData *cnstypes.CnsKubernetesEntityMetadata, cnsMetaData *cnstypes.CnsKubernetesEntityMetadata) bool {
+	if (pvMetaData.EntityName != cnsMetaData.EntityName) || (pvMetaData.Delete != cnsMetaData.Delete) || (pvMetaData.Namespace != cnsMetaData.Namespace) {
+		return false
+	}
+	labelsMatch := reflect.DeepEqual(getLabelsMapFromKeyValue(pvMetaData.Labels), getLabelsMapFromKeyValue(cnsMetaData.Labels))
+	return labelsMatch
+}
+
+// getCnsUpdateOperationType compares the input metadata list from K8S and metadata list from CNS
+// Returns the update operation type that needs to be performed on CNS
+// Empty string returned implies either no operation needs to be performed or
+// volume needs to be deleted from CNS
+func getCnsUpdateOperationType(pvMetadataList []cnstypes.BaseCnsEntityMetadata, cnsMetadataList []cnstypes.BaseCnsEntityMetadata, pvName string) string {
+	// K8s resource metadata contains more entries than CNS - need to update
+	if len(pvMetadataList) > len(cnsMetadataList) {
+		return updateVolumeOperation
+	}
+
+	// K8s resource metadata contains lesser entries than CNS - need to delete
+	// some entries from CNS
+	if len(pvMetadataList) < len(cnsMetadataList) {
+		// Construct CNS volume mappings
+		for _, cnsMetadata := range cnsMetadataList {
+			// Construct CNS volume to Pod name mapping
+			if cnsMetadata.(*cnstypes.CnsKubernetesEntityMetadata).EntityType == string(cnstypes.CnsKubernetesEntityTypePOD) {
+				cnsVolumeToPodMap[pvName] = cnsMetadata.GetCnsEntityMetadata().EntityName
+				cnsVolumeToEntityNamespaceMap[pvName] = cnsMetadata.(*cnstypes.CnsKubernetesEntityMetadata).Namespace
+			}
+			// Construct CNS volume to Pvc name mapping
+			if cnsMetadata.(*cnstypes.CnsKubernetesEntityMetadata).EntityType == string(cnstypes.CnsKubernetesEntityTypePVC) {
+				cnsVolumeToPvcMap[pvName] = cnsMetadata.GetCnsEntityMetadata().EntityName
+				cnsVolumeToEntityNamespaceMap[pvName] = cnsMetadata.(*cnstypes.CnsKubernetesEntityMetadata).Namespace
+			}
+		}
+		// PVC and Pod entries need to be deleted from CNS
+		// as K8s metadata only contains PV entry
+		if len(pvMetadataList) == 1 {
+			return updateVolumeWithDeleteClaimOperation
+		}
+		// Pod entry needs to be deleted from CNS
+		// as K8s metadata only PV and PVC entry
+		if len(pvMetadataList) == 2 {
+			return updateVolumeWithDeletePodOperation
+		}
+	}
+
+	// Same number of entries for volume in K8s and CNS
+	// Need to check if entries match
+	cnsMetadataMap := make(map[string]*cnstypes.CnsKubernetesEntityMetadata)
+	for _, cnsMetadata := range cnsMetadataList {
+		cnsKubernetesMetadata := cnsMetadata.(*cnstypes.CnsKubernetesEntityMetadata)
+		cnsMetadataMap[cnsKubernetesMetadata.EntityType] = cnsKubernetesMetadata
+	}
+	for _, k8sMetadata := range pvMetadataList {
+		k8sKubernetesMetadata := k8sMetadata.(*cnstypes.CnsKubernetesEntityMetadata)
+		if _, ok := cnsMetadataMap[k8sKubernetesMetadata.EntityType]; ok && !compareKubernetesMetadata(k8sKubernetesMetadata, cnsMetadataMap[k8sKubernetesMetadata.EntityType]) {
+			return updateVolumeOperation
+		}
+	}
+	return ""
+}
+
+// buildCnsMetadataSpecMarkedForDelete builds metadata list for a volume
+// where PVC and/or Pod entries need to be deleted from CNS
+// and returns the update spec to be passed to CNS
+func buildCnsMetadataSpecMarkedForDelete(pv *v1.PersistentVolume, operationType string) cnstypes.CnsVolumeMetadataUpdateSpec {
+	// Create new metadata spec with delete flag true
+	var metadataList []cnstypes.BaseCnsEntityMetadata
+	if _, ok := cnsVolumeToPvcMap[pv.Name]; ok && operationType == updateVolumeWithDeleteClaimOperation {
+		pvcMetadata := getCnsKubernetesEntityMetaData(cnsVolumeToPvcMap[pv.Name], nil, true, string(cnstypes.CnsKubernetesEntityTypePVC), cnsVolumeToEntityNamespaceMap[pv.Name])
+		metadataList = append(metadataList, cnstypes.BaseCnsEntityMetadata(pvcMetadata))
+	}
+	if _, ok := cnsVolumeToPodMap[pv.Name]; ok {
+		podMetadata := getCnsKubernetesEntityMetaData(cnsVolumeToPodMap[pv.Name], nil, true, string(cnstypes.CnsKubernetesEntityTypePOD), cnsVolumeToEntityNamespaceMap[pv.Name])
+		metadataList = append(metadataList, cnstypes.BaseCnsEntityMetadata(podMetadata))
+	}
+
+	updateSpec := cnstypes.CnsVolumeMetadataUpdateSpec{
+		VolumeId: pv.Spec.CSI.VolumeHandle,
+		Metadata: cnstypes.CnsVolumeMetadata{
+			EntityMetadata: metadataList,
+		},
+	}
+	return updateSpec
 }
 
 // cleanupCnsMaps performs cleanup on cnsCreationMap and cnsDeletionMap

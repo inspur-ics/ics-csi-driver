@@ -29,7 +29,7 @@ import (
 
 	cnsconfig "ics-csi-driver/pkg/common/config"
 	"ics-csi-driver/pkg/csi/service/cns"
-	vTypes "ics-csi-driver/pkg/csi/types"
+	"ics-csi-driver/pkg/csi/service/common"
 )
 
 const (
@@ -54,7 +54,7 @@ type Service interface {
 
 type service struct {
 	mode string
-	cs   vTypes.Controller
+	cs   common.Controller
 }
 
 // This works around a bug that if k8s node dies, this will clean up the sock file

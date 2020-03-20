@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Kubernetes Authors.
+Copyright 2019 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,9 +16,10 @@ limitations under the License.
 
 package types
 
+type CnsKubernetesEntityType string
+
 const (
-	// LabelRegionFailureDomain is label placed on nodes and PV containing region detail
-	LabelRegionFailureDomain = "failure-domain.beta.kubernetes.io/region"
-	// LabelZoneFailureDomain is label placed on nodes and PV containing zone detail
-	LabelZoneFailureDomain = "failure-domain.beta.kubernetes.io/zone"
+	CnsKubernetesEntityTypePVC = CnsKubernetesEntityType("PERSISTENT_VOLUME_CLAIM")
+	CnsKubernetesEntityTypePV  = CnsKubernetesEntityType("PERSISTENT_VOLUME")
+	CnsKubernetesEntityTypePOD = CnsKubernetesEntityType("POD")
 )

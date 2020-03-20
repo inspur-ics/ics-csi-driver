@@ -29,7 +29,6 @@ import (
 	"ics-csi-driver/pkg/common/config"
 	"ics-csi-driver/pkg/common/ics"
 	"ics-csi-driver/pkg/csi/service/common"
-	csitypes "ics-csi-driver/pkg/csi/types"
 )
 
 var (
@@ -54,7 +53,7 @@ type controller struct {
 }
 
 // New creates a CNS controller
-func New() csitypes.Controller {
+func New() common.Controller {
 	return &controller{}
 }
 

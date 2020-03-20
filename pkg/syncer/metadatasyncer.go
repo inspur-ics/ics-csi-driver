@@ -25,13 +25,14 @@ import (
 	"strconv"
 	"time"
 
-	//"github.com/davecgh/go-spew/spew"
+	"github.com/davecgh/go-spew/spew"
 	csictx "github.com/rexray/gocsi/context"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog"
 
 	cnsconfig "ics-csi-driver/pkg/common/config"
 	"ics-csi-driver/pkg/common/ics"
+	cnstypes "ics-csi-driver/pkg/common/types"
 	"ics-csi-driver/pkg/csi/service"
 	//"ics-csi-driver/pkg/csi/service/common"
 	k8s "ics-csi-driver/pkg/common/kubernetes"
@@ -161,6 +162,48 @@ func (metadataSyncer *MetadataSyncInformer) Init() error {
 	return nil
 }
 
+// getCnsKubernetesEntityMetaData creates a CnsKubernetesEntityMetadata object from given parameters
+func getCnsKubernetesEntityMetaData(entityName string, labels map[string]string, deleteFlag bool, entityType string, namespace string) *cnstypes.CnsKubernetesEntityMetadata {
+	// Create new metadata spec
+	var newLabels []cnstypes.KeyValue
+	for labelKey, labelVal := range labels {
+		newLabels = append(newLabels, cnstypes.KeyValue{
+			Key:   labelKey,
+			Value: labelVal,
+		})
+	}
+
+	entityMetadata := &cnstypes.CnsKubernetesEntityMetadata{}
+	entityMetadata.EntityName = entityName
+	entityMetadata.Delete = deleteFlag
+	if labels != nil {
+		entityMetadata.Labels = newLabels
+	}
+	entityMetadata.EntityType = entityType
+	entityMetadata.Namespace = namespace
+	return entityMetadata
+}
+
+// getContainerCluster creates a ContainerCluster object from given parameters
+func getContainerCluster(clusterId string, userName string) cnstypes.CnsContainerCluster {
+	return cnstypes.CnsContainerCluster{
+		ClusterType: "KUBERNETES",
+		ClusterId:   clusterId,
+		UserName:    userName,
+	}
+}
+
+// getCnsVolumeMetadataUpdateSpec creates a CnsVolumeMetadataUpdateSpec object from given parameters
+func getCnsVolumeMetadataUpdateSpec(volumeId string, metadataList []cnstypes.BaseCnsEntityMetadata, metadataSyncer *MetadataSyncInformer) *cnstypes.CnsVolumeMetadataUpdateSpec {
+	return &cnstypes.CnsVolumeMetadataUpdateSpec{
+		VolumeId: volumeId,
+		Metadata: cnstypes.CnsVolumeMetadata{
+			ContainerCluster: getContainerCluster(metadataSyncer.cfg.Global.ClusterID, metadataSyncer.cfg.VirtualCenter[metadataSyncer.vcenter.Config.Host].User),
+			EntityMetadata:   metadataList,
+		},
+	}
+}
+
 // pvcUpdated updates persistent volume claim metadata on VC when pvc labels on K8S cluster have been updated
 func pvcUpdated(oldObj, newObj interface{}, metadataSyncer *MetadataSyncInformer) {
 	// Get old and new pvc objects
@@ -185,9 +228,9 @@ func pvcUpdated(oldObj, newObj interface{}, metadataSyncer *MetadataSyncInformer
 		return
 	}
 
-	// Verify if pv is vsphere csi volume
+	// Verify if pv is ics csi volume
 	if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != service.Name {
-		klog.V(3).Infof("PVCUpdated: Not a Vsphere CSI Volume")
+		klog.V(3).Infof("PVCUpdated: Not a IncloudSphere CSI Volume")
 		return
 	}
 
@@ -196,6 +239,17 @@ func pvcUpdated(oldObj, newObj interface{}, metadataSyncer *MetadataSyncInformer
 		klog.V(3).Infof("PVCUpdated: Old PVC and New PVC labels equal")
 		return
 	}
+
+	// Create updateSpec
+	var metadataList []cnstypes.BaseCnsEntityMetadata
+	pvcMetadata := getCnsKubernetesEntityMetaData(newPvc.Name, newPvc.Labels, false, string(cnstypes.CnsKubernetesEntityTypePVC), newPvc.Namespace)
+	metadataList = append(metadataList, cnstypes.BaseCnsEntityMetadata(pvcMetadata))
+
+	updateSpec := getCnsVolumeMetadataUpdateSpec(pv.Spec.CSI.VolumeHandle, metadataList, metadataSyncer)
+	klog.V(4).Infof("PVCUpdated: Calling UpdateVolumeMetadata with updateSpec: %+v", spew.Sdump(updateSpec))
+	//if err := ics.GetVolumeManager(metadataSyncer.vcenter).UpdateVolumeMetadata(updateSpec); err != nil {
+	//	klog.Errorf("PVCUpdated: UpdateVolumeMetadata failed with err %v", err)
+	//}
 }
 
 // pvDeleted deletes pvc metadata on VC when pvc has been deleted on K8s cluster
@@ -216,9 +270,9 @@ func pvcDeleted(obj interface{}, metadataSyncer *MetadataSyncInformer) {
 		return
 	}
 
-	// Verify if pv is a vsphere csi volume
+	// Verify if pv is a ics csi volume
 	if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != service.Name {
-		klog.V(3).Infof("PVCDeleted: Not a Vsphere CSI Volume")
+		klog.V(3).Infof("PVCDeleted: Not a IncloudSphere CSI Volume")
 		return
 	}
 
@@ -228,6 +282,16 @@ func pvcDeleted(obj interface{}, metadataSyncer *MetadataSyncInformer) {
 		return
 	}
 
+	// If the PV reclaim policy is retain we need to delete PVC labels
+	var metadataList []cnstypes.BaseCnsEntityMetadata
+	pvcMetadata := getCnsKubernetesEntityMetaData(pvc.Name, nil, true, string(cnstypes.CnsKubernetesEntityTypePVC), pvc.Namespace)
+	metadataList = append(metadataList, cnstypes.BaseCnsEntityMetadata(pvcMetadata))
+
+	updateSpec := getCnsVolumeMetadataUpdateSpec(pv.Spec.CSI.VolumeHandle, metadataList, metadataSyncer)
+	klog.V(4).Infof("PVCDeleted: Calling UpdateVolumeMetadata for volume %s with updateSpec: %+v", updateSpec.VolumeId, spew.Sdump(updateSpec))
+	//if err := ics.GetVolumeManager(metadataSyncer.vcenter).UpdateVolumeMetadata(updateSpec); err != nil {
+	//	klog.Errorf("PVCDeleted: UpdateVolumeMetadata failed with err %v", err)
+	//}
 }
 
 // pvUpdated updates volume metadata on VC when volume labels on K8S cluster have been updated
@@ -244,11 +308,11 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *MetadataSyncInformer)
 		klog.Warningf("PVUpdated: unrecognized new object %+v", newObj)
 		return
 	}
-	klog.V(4).Infof("PVUpdated: PV Updated from %+v to %+v", oldPv, newPv)
+	klog.V(5).Infof("PVUpdated: PV Updated from %+v to \n %+v", oldPv, newPv)
 
-	// Verify if pv is a vsphere csi volume
+	// Verify if pv is a ics csi volume
 	if oldPv.Spec.CSI == nil || newPv.Spec.CSI == nil || newPv.Spec.CSI.Driver != service.Name {
-		klog.V(3).Infof("PVUpdated: PV is not a Vsphere CSI Volume: %+v", newPv)
+		klog.V(3).Infof("PVUpdated: PV is not a IncloudSphere CSI Volume: %+v", newPv)
 		return
 	}
 	// Return if new PV status is Pending or Failed
@@ -269,6 +333,20 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *MetadataSyncInformer)
 		klog.V(3).Infof("PVUpdated: PV already deleted")
 		return
 	}
+
+	var metadataList []cnstypes.BaseCnsEntityMetadata
+	pvMetadata := getCnsKubernetesEntityMetaData(newPv.Name, newPv.GetLabels(), false, string(cnstypes.CnsKubernetesEntityTypePV), newPv.Namespace)
+	metadataList = append(metadataList, cnstypes.BaseCnsEntityMetadata(pvMetadata))
+
+	if oldPv.Status.Phase == v1.VolumeAvailable || newPv.Spec.StorageClassName != "" {
+		updateSpec := getCnsVolumeMetadataUpdateSpec(newPv.Spec.CSI.VolumeHandle, metadataList, metadataSyncer)
+		klog.V(4).Infof("PVUpdated: Calling UpdateVolumeMetadata for volume %s with updateSpec: %+v", updateSpec.VolumeId, spew.Sdump(updateSpec))
+		//if err := ics.GetVolumeManager(metadataSyncer.vcenter).UpdateVolumeMetadata(updateSpec); err != nil {
+		//	klog.Errorf("PVUpdated: UpdateVolumeMetadata failed with err %v", err)
+		//}
+	} else {
+		//CreateVolume
+	}
 }
 
 // pvDeleted deletes volume metadata on VC when volume has been deleted on K8s cluster
@@ -280,9 +358,9 @@ func pvDeleted(obj interface{}, metadataSyncer *MetadataSyncInformer) {
 	}
 	klog.V(4).Infof("PVDeleted: Deleting PV: %+v", pv)
 
-	// Verify if pv is a vsphere csi volume
+	// Verify if pv is a ics csi volume
 	if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != service.Name {
-		klog.V(3).Infof("PVDeleted: Not a Vsphere CSI Volume: %+v", pv)
+		klog.V(3).Infof("PVDeleted: Not a IncloudSphere CSI Volume: %+v", pv)
 		return
 	}
 	var deleteDisk bool
@@ -302,7 +380,11 @@ func pvDeleted(obj interface{}, metadataSyncer *MetadataSyncInformer) {
 	}
 	volumeOperationsLock.Lock()
 	defer volumeOperationsLock.Unlock()
-	klog.V(4).Infof("PVDeleted: vSphere provisioner deleting volume %v with delete disk %v", pv, deleteDisk)
+	klog.V(4).Infof("PVDeleted: ics provisioner deleting volume %v with delete disk %v", pv, deleteDisk)
+	if err := ics.GetVolumeManager(metadataSyncer.vcenter).DeleteVolume(pv.Spec.CSI.VolumeHandle, deleteDisk); err != nil {
+		klog.Errorf("PVDeleted: Failed to delete disk %s with error %+v", pv.Spec.CSI.VolumeHandle, err)
+		return
+	}
 }
 
 // podUpdated updates pod metadata on VC when pod labels have been updated on K8s cluster
@@ -317,6 +399,18 @@ func podUpdated(oldObj, newObj interface{}, metadataSyncer *MetadataSyncInformer
 	if newPod == nil || !ok {
 		klog.Warningf("PodUpdated: unrecognized new object %+v", newObj)
 		return
+	}
+
+	// If old pod is in pending state and new pod is running, update metadata
+	if oldPod.Status.Phase == v1.PodPending && newPod.Status.Phase == v1.PodRunning {
+		klog.V(3).Infof("PodUpdated: Pod %s calling updatePodMetadata", newPod.Name)
+		// Update pod metadata
+		if errorList := updatePodMetadata(newPod, metadataSyncer, false); len(errorList) > 0 {
+			klog.Errorf("PodUpdated: updatePodMetadata failed for pod %s with errors: ", newPod.Name)
+			for _, err := range errorList {
+				klog.Errorf("PodUpdated: %v", err)
+			}
+		}
 	}
 }
 
@@ -339,7 +433,6 @@ func podDeleted(obj interface{}, metadataSyncer *MetadataSyncInformer) {
 		for _, err := range errorList {
 			klog.Errorf("PodDeleted: %v", err)
 		}
-
 	}
 }
 
@@ -366,11 +459,20 @@ func updatePodMetadata(pod *v1.Pod, metadataSyncer *MetadataSyncInformer, delete
 				continue
 			}
 
-			// Verify if pv is vsphere csi volume
+			// Verify if pv is ics csi volume
 			if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != service.Name {
-				klog.V(3).Infof("Not a Vsphere CSI Volume")
+				klog.V(3).Infof("Not a IncloudSphere CSI Volume")
 				continue
 			}
+			var metadataList []cnstypes.BaseCnsEntityMetadata
+			podMetadata := getCnsKubernetesEntityMetaData(pod.Name, nil, deleteFlag, string(cnstypes.CnsKubernetesEntityTypePOD), pod.Namespace)
+			metadataList = append(metadataList, cnstypes.BaseCnsEntityMetadata(podMetadata))
+			updateSpec := getCnsVolumeMetadataUpdateSpec(pv.Spec.CSI.VolumeHandle, metadataList, metadataSyncer)
+			klog.V(4).Infof("Calling UpdateVolumeMetadata for volume %s with updateSpec: %+v", updateSpec.VolumeId, spew.Sdump(updateSpec))
+			//if err := ics.GetVolumeManager(metadataSyncer.vcenter).UpdateVolumeMetadata(updateSpec); err != nil {
+			//	msg := fmt.Sprintf("UpdateVolumeMetadata failed for volume %s with err: %v", volume.Name, err)
+			//	errorList = append(errorList, errors.New(msg))
+			//}
 		}
 	}
 	return errorList

@@ -34,6 +34,13 @@ var (
 	}
 )
 
+// Controller is the interface for the CSI Controller Server plus extra methods
+// required to support multiple API backends
+type Controller interface {
+	csi.ControllerServer
+	Init(config *config.Config) error
+}
+
 // Manager type comprises VirtualCenterConfig, CnsConfig, VolumeManager and VirtualCenterManager
 type Manager struct {
 	VcenterConfig  *ics.VirtualCenterConfig

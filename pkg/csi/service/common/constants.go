@@ -73,3 +73,10 @@ const (
 	// MinSupportedVCenterPatch is the patch version supported with MinSupportedVCenterMajor and MinSupportedVCenterMinor
 	MinSupportedVCenterPatch int = 3
 )
+
+const (
+	// LabelRegionFailureDomain is label placed on nodes and PV containing region detail
+	LabelRegionFailureDomain = "failure-domain.beta.kubernetes.io/region"
+	// LabelZoneFailureDomain is label placed on nodes and PV containing zone detail
+	LabelZoneFailureDomain = "failure-domain.beta.kubernetes.io/zone"
+)
