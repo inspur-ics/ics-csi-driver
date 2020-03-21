@@ -5,6 +5,8 @@ metadata:
   annotations:
     storageclass.kubernetes.io/is-default-class: "true"
 provisioner: csi.incloudsphere.inspur.com
+parameters:
+  fstype: "xfs"
 allowedTopologies:
   - matchLabelExpressions:
       - key: failure-domain.beta.kubernetes.io/zone
