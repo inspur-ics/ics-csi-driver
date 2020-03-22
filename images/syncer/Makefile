@@ -2,15 +2,33 @@ all: build
 
 .PHONY: build
 
-VERSION ?= $(shell git describe --always)
-IMAGE ?= ics-csi-syncer
-IMAGE_TAG ?= $(IMAGE):$(VERSION)
-IMAGE_TAR ?= /tmp/$(IMAGE_TAG).tar
+SYNCER_BIN_NAME ?= syncer
+TAG := $(shell git describe --always)
+IMAGE := ics-csi-syncer
+IMAGE_TAG := $(IMAGE):$(TAG)
+IMAGE_TAR := $(IMAGE)-$(TAG).tar
 
 build:
 	docker build -t $(IMAGE_TAG) .
 	docker tag $(IMAGE_TAG) $(IMAGE):latest
-load: build
 	docker image save $(IMAGE):latest -o $(IMAGE_TAR)
+
+.PHONY: clean
+clean:
+	rm -f $(SYNCER_BIN_NAME)
+	rm -f $(IMAGE_TAR)
+
+.PHONY: rmi
+rmi: 
+	@docker rmi --no-prune $(IMAGE_TAG) $(IMAGE):latest 2>/dev/null || true
+
+.PHONY: clobber
+clobber: rmi
+	@docker rmi -f $$(docker images -qf reference=$(IMAGE):*) 2>/dev/null || true
+
+.PHONY: load
+load: build
 	ctr cri load $(IMAGE_TAR)
+
+
 

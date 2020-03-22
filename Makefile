@@ -85,7 +85,6 @@ endif
 $(CSI_BIN): $(CSI_BIN_SRCS)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags '$(LDFLAGS_CSI)' -o $(abspath $@) $<
 	@touch $@
-	@cp -f  $@ ./images/csi/$(CSI_BIN_NAME)
 
 # The Syncer binary.
 SYNCER_BIN_NAME := syncer
@@ -99,7 +98,6 @@ endif
 $(SYNCER_BIN): $(SYNCER_BIN_SRCS)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags '$(LDFLAGS_SYNCER)' -o $(abspath $@) $<
 	@touch $@
-	@cp -f  $@ ./images/syncer/$(SYNCER_BIN_NAME)
 
 # The default build target.
 build build-bins: $(CSI_BIN) $(SYNCER_BIN)
@@ -109,12 +107,28 @@ build build-bins: $(CSI_BIN) $(SYNCER_BIN)
 ################################################################################
 .PHONY: clean
 clean:
-	@rm -f Dockerfile*
-	rm -f $(CSI_BIN) $(SYNCER_BIN) images/csi/$(CSI_BIN_NAME) images/syncer/$(SYNCER_BIN_NAME) $(BIN_OUT)/*
-#	GO111MODULE=off go clean -i -x . ./cmd/$(CSI_BIN_NAME) ./cmd/$(SYNCER_BIN_NAME)
+	rm -f $(CSI_BIN) $(SYNCER_BIN) $(BIN_OUT)/*
+	@$(MAKE) -C images/csi clean
+	@$(MAKE) -C images/syncer clean
 .PHONY: clean-d
 clean-d:
 	@find . -name "*.d" -type f -delete
+
+################################################################################
+##                                 BUILD IMAGES                               ##
+################################################################################
+.PHONY: csi-image	
+csi-image: build-csi
+	@cp -f $(CSI_BIN) ./images/csi/$(CSI_BIN_NAME)
+	@$(MAKE) -C images/csi
+
+.PHONY:	syncer-image
+syncer-image: build-syncer
+	@cp -f $(SYNCER_BIN) ./images/syncer/$(SYNCER_BIN_NAME)
+	@$(MAKE) -C images/syncer
+
+.PHONY: images
+images: csi-image syncer-image
 
 ################################################################################
 ##                                 LINTING                                    ##
