@@ -15,4 +15,4 @@ spec:
   volumes:
   - name: test-volume
     persistentVolumeClaim:
-      claimName: example-block-pvc-zone
+      claimName: example-cfs-pvc

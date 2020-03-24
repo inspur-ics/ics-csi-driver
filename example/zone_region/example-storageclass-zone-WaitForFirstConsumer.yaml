@@ -1,12 +1,11 @@
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
-  name: example-block-sc-zone
+  name: example-sc-zone-wfc
   annotations:
-    storageclass.kubernetes.io/is-default-class: "true"
+    storageclass.kubernetes.io/is-default-class: "false"
 provisioner: csi.incloudsphere.inspur.com
-parameters:
-  fstype: "xfs"
+volumeBindingMode: WaitForFirstConsumer
 allowedTopologies:
   - matchLabelExpressions:
       - key: failure-domain.beta.kubernetes.io/zone

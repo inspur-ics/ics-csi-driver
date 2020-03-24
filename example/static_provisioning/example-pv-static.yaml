@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: example-static-pv
+  annotations:
+    pv.kubernetes.io/provisioned-by: csi.incloudsphere.inspur.com
+spec:
+  capacity:
+    storage: 20Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  csi:
+    driver: csi.incloudsphere.inspur.com
+    volumeHandle: 8a878bda6f7012c7017107ffbec76609 

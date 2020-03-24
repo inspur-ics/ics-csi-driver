@@ -41,7 +41,7 @@ spec:
   - metadata:
       name: www
       annotations:
-        volume.beta.kubernetes.io/storage-class: example-block-storageclass
+        volume.beta.kubernetes.io/storage-class: example-local-storage
     spec:
       accessModes: [ "ReadWriteOnce" ]
       resources:

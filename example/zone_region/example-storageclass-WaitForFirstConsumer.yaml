@@ -1,0 +1,8 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: example-sc-wfc
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "false"
+provisioner: csi.incloudsphere.inspur.com
+volumeBindingMode: WaitForFirstConsumer

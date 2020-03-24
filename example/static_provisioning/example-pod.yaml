@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: example-busybox-pod
+  name: example-busybox-pod-static
 spec:
   containers:
   - name: test-container
@@ -15,4 +15,4 @@ spec:
   volumes:
   - name: test-volume
     persistentVolumeClaim:
-      claimName: example-local-pvc
+      claimName: example-static-pvc
