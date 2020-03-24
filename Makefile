@@ -84,6 +84,7 @@ export CSI_BIN_SRCS
 endif
 $(CSI_BIN): $(CSI_BIN_SRCS)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags '$(LDFLAGS_CSI)' -o $(abspath $@) $<
+	@cp -f $@ images/csi/$(CSI_BIN_NAME)
 	@touch $@
 
 # The Syncer binary.
@@ -97,6 +98,7 @@ export SYNCER_BIN_SRCS
 endif
 $(SYNCER_BIN): $(SYNCER_BIN_SRCS)
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build -ldflags '$(LDFLAGS_SYNCER)' -o $(abspath $@) $<
+	@cp -f $@ images/syncer/$(SYNCER_BIN_NAME)
 	@touch $@
 
 # The default build target.
@@ -107,7 +109,7 @@ build build-bins: $(CSI_BIN) $(SYNCER_BIN)
 ################################################################################
 .PHONY: clean
 clean:
-	rm -f $(CSI_BIN) $(SYNCER_BIN) $(BIN_OUT)/*
+	rm -f $(CSI_BIN) $(SYNCER_BIN) images/csi/$(CSI_BIN_NAME) images/syncer/$(SYNCER_BIN_NAME)
 	@$(MAKE) -C images/csi clean
 	@$(MAKE) -C images/syncer clean
 .PHONY: clean-d
@@ -119,12 +121,10 @@ clean-d:
 ################################################################################
 .PHONY: csi-image	
 csi-image: build-csi
-	@cp -f $(CSI_BIN) ./images/csi/$(CSI_BIN_NAME)
 	@$(MAKE) -C images/csi
 
 .PHONY:	syncer-image
 syncer-image: build-syncer
-	@cp -f $(SYNCER_BIN) ./images/syncer/$(SYNCER_BIN_NAME)
 	@$(MAKE) -C images/syncer
 
 .PHONY: images

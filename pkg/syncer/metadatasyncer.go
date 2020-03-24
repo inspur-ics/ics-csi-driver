@@ -217,7 +217,7 @@ func pvcUpdated(oldObj, newObj interface{}, metadataSyncer *MetadataSyncInformer
 	}
 
 	if newPvc.Status.Phase != v1.ClaimBound {
-		klog.V(3).Infof("PVCUpdated: New PVC not in Bound phase")
+		klog.V(3).Infof("PVCUpdated: New PVC %s in %s phase", newPvc.Name, newPvc.Status.Phase)
 		return
 	}
 
@@ -230,13 +230,13 @@ func pvcUpdated(oldObj, newObj interface{}, metadataSyncer *MetadataSyncInformer
 
 	// Verify if pv is ics csi volume
 	if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != service.Name {
-		klog.V(3).Infof("PVCUpdated: Not a IncloudSphere CSI Volume")
+		klog.V(3).Infof("PVCUpdated: PV %s Not a IncloudSphere CSI Volume", pv.Name)
 		return
 	}
 
 	// Verify is old and new labels are not equal
 	if oldPvc.Status.Phase == v1.ClaimBound && reflect.DeepEqual(newPvc.Labels, oldPvc.Labels) {
-		klog.V(3).Infof("PVCUpdated: Old PVC and New PVC labels equal")
+		klog.V(3).Infof("PVCUpdated: PVC %s (phase: %s) Old PVC and New PVC labels equal", oldPvc.Name, oldPvc.Status.Phase)
 		return
 	}
 
@@ -259,7 +259,7 @@ func pvcDeleted(obj interface{}, metadataSyncer *MetadataSyncInformer) {
 		klog.Warningf("PVCDeleted: unrecognized object %+v", obj)
 		return
 	}
-	klog.V(4).Infof("PVCDeleted: %+v", pvc)
+	klog.V(5).Infof("PVCDeleted: PVC %s bond to PV %s", pvc.Name, pvc.Spec.VolumeName)
 	if pvc.Status.Phase != v1.ClaimBound {
 		return
 	}
@@ -272,13 +272,13 @@ func pvcDeleted(obj interface{}, metadataSyncer *MetadataSyncInformer) {
 
 	// Verify if pv is a ics csi volume
 	if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != service.Name {
-		klog.V(3).Infof("PVCDeleted: Not a IncloudSphere CSI Volume")
+		klog.V(3).Infof("PVCDeleted: PV %s is not a IncloudSphere CSI Volume", pv.Name)
 		return
 	}
 
 	// Volume will be deleted by controller when reclaim policy is delete
 	if pv.Spec.PersistentVolumeReclaimPolicy == v1.PersistentVolumeReclaimDelete {
-		klog.V(3).Infof("PVCDeleted: Reclaim policy is delete")
+		klog.V(3).Infof("PVCDeleted: PV %s Id %s Reclaim policy is Delete", pv.Name, pv.Spec.CSI.VolumeHandle)
 		return
 	}
 
@@ -308,31 +308,34 @@ func pvUpdated(oldObj, newObj interface{}, metadataSyncer *MetadataSyncInformer)
 		klog.Warningf("PVUpdated: unrecognized new object %+v", newObj)
 		return
 	}
-	klog.V(5).Infof("PVUpdated: PV Updated from %+v to \n %+v", oldPv, newPv)
 
 	// Verify if pv is a ics csi volume
 	if oldPv.Spec.CSI == nil || newPv.Spec.CSI == nil || newPv.Spec.CSI.Driver != service.Name {
-		klog.V(3).Infof("PVUpdated: PV is not a IncloudSphere CSI Volume: %+v", newPv)
+		klog.V(3).Infof("PVUpdated: PV %s is not a IncloudSphere CSI Volume", newPv.Name)
 		return
 	}
 	// Return if new PV status is Pending or Failed
 	if newPv.Status.Phase == v1.VolumePending || newPv.Status.Phase == v1.VolumeFailed {
-		klog.V(3).Infof("PVUpdated: PV %s metadata is not updated since updated PV is in phase %s", newPv.Name, newPv.Status.Phase)
+		klog.V(3).Infof("PVUpdated: PV %s Id %s (newPhase: %s) metadata is not updated", newPv.Name, newPv.Spec.CSI.VolumeHandle, newPv.Status.Phase)
 		return
 	}
 	// Return if labels are unchanged
 	if oldPv.Status.Phase == v1.VolumeAvailable && reflect.DeepEqual(newPv.GetLabels(), oldPv.GetLabels()) {
-		klog.V(3).Infof("PVUpdated: PV labels have not changed")
+		klog.V(3).Infof("PVUpdated: PV %s Id %s (oldPhase: %s) labels have not changed", oldPv.Name, oldPv.Spec.CSI.VolumeHandle, oldPv.Status.Phase)
 		return
 	}
 	if oldPv.Status.Phase == v1.VolumeBound && newPv.Status.Phase == v1.VolumeReleased && oldPv.Spec.PersistentVolumeReclaimPolicy == v1.PersistentVolumeReclaimDelete {
-		klog.V(3).Infof("PVUpdated: Volume will be deleted by controller")
+		klog.V(3).Infof("PVUpdated: PV %s Id %s (oldPhase: %s newPhase: %s reclaimPolicy: %s) will be deleted by controller", newPv.Name,
+			newPv.Spec.CSI.VolumeHandle, oldPv.Status.Phase, newPv.Status.Phase, oldPv.Spec.PersistentVolumeReclaimPolicy)
 		return
 	}
 	if newPv.DeletionTimestamp != nil {
-		klog.V(3).Infof("PVUpdated: PV already deleted")
+		klog.V(3).Infof("PVUpdated: PV %s Id %s already deleted", newPv.Name, newPv.Spec.CSI.VolumeHandle)
 		return
 	}
+
+	klog.V(5).Infof("PVUpdated: PV %s Id %s (oldPhase: %s newPhase: %s) labels updated from %+v to  %+v", newPv.Name, newPv.Spec.CSI.VolumeHandle,
+		oldPv.Status.Phase, newPv.Status.Phase, oldPv.GetLabels(), newPv.GetLabels())
 
 	var metadataList []cnstypes.BaseCnsEntityMetadata
 	pvMetadata := getCnsKubernetesEntityMetaData(newPv.Name, newPv.GetLabels(), false, string(cnstypes.CnsKubernetesEntityTypePV), newPv.Namespace)
@@ -356,33 +359,36 @@ func pvDeleted(obj interface{}, metadataSyncer *MetadataSyncInformer) {
 		klog.Warningf("PVDeleted: unrecognized object %+v", obj)
 		return
 	}
-	klog.V(4).Infof("PVDeleted: Deleting PV: %+v", pv)
+	//klog.V(7).Infof("PVDeleted: Deleting PV: %+v", pv)
 
 	// Verify if pv is a ics csi volume
 	if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != service.Name {
-		klog.V(3).Infof("PVDeleted: Not a IncloudSphere CSI Volume: %+v", pv)
+		klog.V(3).Infof("PVDeleted: PV %s is not a IncloudSphere CSI Volume", pv.Name)
 		return
 	}
 	var deleteDisk bool
 	if pv.Spec.ClaimRef != nil && (pv.Status.Phase == v1.VolumeAvailable || pv.Status.Phase == v1.VolumeReleased) && pv.Spec.PersistentVolumeReclaimPolicy == v1.PersistentVolumeReclaimDelete {
-		klog.V(3).Infof("PVDeleted: Volume deletion will be handled by Controller")
+		klog.V(3).Infof("PVDeleted: PV %s Id %s (phase: %s reclaimPolicy: %s) deletion will be handled by Controller", pv.Name, pv.Spec.CSI.VolumeHandle,
+			pv.Status.Phase, pv.Spec.PersistentVolumeReclaimPolicy)
 		return
 	}
 
 	if pv.Spec.ClaimRef == nil || (pv.Spec.PersistentVolumeReclaimPolicy != v1.PersistentVolumeReclaimDelete) {
-		klog.V(4).Infof("PVDeleted: Setting DeleteDisk to false")
 		deleteDisk = false
 	} else {
 		// We set delete disk=true for the case where PV status is failed after deletion of pvc
 		// In this case, metadatasyncer will remove the volume
-		klog.V(4).Infof("PVDeleted: Setting DeleteDisk to true")
 		deleteDisk = true
 	}
+
+	klog.V(4).Infof("PVDeleted: PV %s Id %s (phase: %s reclaimPolicy: %s) setting DeleteDisk to %v", pv.Name, pv.Spec.CSI.VolumeHandle,
+		pv.Status.Phase, pv.Spec.PersistentVolumeReclaimPolicy, deleteDisk)
+
 	volumeOperationsLock.Lock()
 	defer volumeOperationsLock.Unlock()
-	klog.V(4).Infof("PVDeleted: ics provisioner deleting volume %v with delete disk %v", pv, deleteDisk)
+	klog.V(4).Infof("PVDeleted: Deleting PV %s Id %s  with deleteDisk %v", pv.Name, pv.Spec.CSI.VolumeHandle, deleteDisk)
 	if err := ics.GetVolumeManager(metadataSyncer.vcenter).DeleteVolume(pv.Spec.CSI.VolumeHandle, deleteDisk); err != nil {
-		klog.Errorf("PVDeleted: Failed to delete disk %s with error %+v", pv.Spec.CSI.VolumeHandle, err)
+		klog.Errorf("PVDeleted: Failed to delete PV %s Id %s with error %+v", pv.Name, pv.Spec.CSI.VolumeHandle, err)
 		return
 	}
 }
@@ -403,7 +409,8 @@ func podUpdated(oldObj, newObj interface{}, metadataSyncer *MetadataSyncInformer
 
 	// If old pod is in pending state and new pod is running, update metadata
 	if oldPod.Status.Phase == v1.PodPending && newPod.Status.Phase == v1.PodRunning {
-		klog.V(3).Infof("PodUpdated: Pod %s calling updatePodMetadata", newPod.Name)
+		klog.V(3).Infof("PodUpdated: Pod %s (oldPhase: %s newPhase: %s) calling updatePodMetadata", newPod.Name,
+			oldPod.Status.Phase, newPod.Status.Phase)
 		// Update pod metadata
 		if errorList := updatePodMetadata(newPod, metadataSyncer, false); len(errorList) > 0 {
 			klog.Errorf("PodUpdated: updatePodMetadata failed for pod %s with errors: ", newPod.Name)
@@ -461,7 +468,7 @@ func updatePodMetadata(pod *v1.Pod, metadataSyncer *MetadataSyncInformer, delete
 
 			// Verify if pv is ics csi volume
 			if pv.Spec.CSI == nil || pv.Spec.CSI.Driver != service.Name {
-				klog.V(3).Infof("Not a IncloudSphere CSI Volume")
+				klog.V(3).Infof("PV %s is not a IncloudSphere CSI Volume", pv.Name)
 				continue
 			}
 			var metadataList []cnstypes.BaseCnsEntityMetadata

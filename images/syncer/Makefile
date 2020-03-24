@@ -2,7 +2,6 @@ all: build
 
 .PHONY: build
 
-SYNCER_BIN_NAME ?= syncer
 TAG := $(shell git describe --always)
 IMAGE := ics-csi-syncer
 IMAGE_TAG := $(IMAGE):$(TAG)
@@ -15,7 +14,6 @@ build:
 
 .PHONY: clean
 clean:
-	rm -f $(SYNCER_BIN_NAME)
 	rm -f $(IMAGE_TAR)
 
 .PHONY: rmi
@@ -27,7 +25,8 @@ clobber: rmi
 	@docker rmi -f $$(docker images -qf reference=$(IMAGE):*) 2>/dev/null || true
 
 .PHONY: load
-load: build
+load:
+	@[ -f $(IMAGE_TAR) ] || make build
 	ctr cri load $(IMAGE_TAR)
 
 
