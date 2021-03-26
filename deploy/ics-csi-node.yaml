@@ -18,7 +18,7 @@ spec:
       hostNetwork: true
       containers:
         - name: node-driver-registrar
-          image: quay.io/k8scsi/csi-node-driver-registrar:v1.1.0
+          image: quay.io/k8scsi/csi-node-driver-registrar:v2.1.0
           imagePullPolicy: IfNotPresent
           lifecycle:
             preStop:
@@ -89,7 +89,7 @@ spec:
             periodSeconds: 5
             failureThreshold: 3
         - name: liveness-probe
-          image: quay.io/k8scsi/livenessprobe:v1.1.0
+          image: quay.io/k8scsi/livenessprobe:v2.1.0
           args:
             - "--csi-address=$(ADDRESS)"
           env:
