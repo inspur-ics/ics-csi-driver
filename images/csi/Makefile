@@ -6,11 +6,12 @@ TAG := $(shell git describe --always)
 IMAGE := ics-csi-driver
 IMAGE_TAG := $(IMAGE):$(TAG)
 IMAGE_TAR := $(IMAGE)-$(TAG).tar
+IMAGE_LATEST := docker.io/library/$(IMAGE):latest
 
 build:
 	docker build -t $(IMAGE_TAG) .
-	docker tag $(IMAGE_TAG) $(IMAGE):latest
-	docker image save $(IMAGE):latest -o $(IMAGE_TAR)
+	docker tag $(IMAGE_TAG) $(IMAGE_LATEST)
+	docker image save $(IMAGE_LATEST) -o $(IMAGE_TAR)
 
 .PHONY: clean
 clean:
@@ -18,7 +19,7 @@ clean:
 
 .PHONY: rmi
 rmi: 
-	@docker rmi --no-prune $(IMAGE_TAG) $(IMAGE):latest 2>/dev/null || true
+	@docker rmi --no-prune $(IMAGE_TAG) $(IMAGE_LATEST) 2>/dev/null || true
 
 .PHONY: clobber
 clobber: rmi

@@ -182,13 +182,12 @@ func (m *volumeManager) AttachVolume(vm *VirtualMachine, volumeId string) (strin
 
 	diskInfo := types.Disk{
 		ID:             volumeId,
-		Label:          "",
-		ScsiID:         fmt.Sprintf("6%.15s", volumeId[len(volumeId)-15:]),
 		Enabled:        false,
 		Volume:         volInfo,
 		BusModel:       "SCSI",
 		ReadWriteModel: "NONE",
 		EnableNativeIO: false,
+		QueueNum:       1,
 	}
 
 	vmInfo := *vm.VirtualMachine
@@ -219,8 +218,22 @@ func (m *volumeManager) AttachVolume(vm *VirtualMachine, volumeId string) (strin
 		return "", errors.New(errMsg)
 	}
 
-	klog.V(5).Infof("Attach volume %s task finished", volumeId)
-	return diskInfo.ScsiID, nil
+	err = vm.Renew(false)
+	if err != nil {
+		klog.Errorf("Get VM %v info failed with err: %+v", vm, err)
+		return "", err
+	}
+
+	for _, diskInfo := range vm.VirtualMachine.Disks {
+		if diskInfo.Volume.ID == volumeId {
+			klog.V(5).Infof("Attach volume %s task finished, disk label %s", volumeId, diskInfo.Label)
+			return diskInfo.Volume.ScsiID, nil
+		}
+	}
+
+	errMsg := fmt.Sprintf("Attach volume %s task failed, volume not found.", volumeId)
+	klog.Errorf(errMsg)
+	return "", errors.New(errMsg)
 }
 
 // DetachVolume detaches a volume from the virtual machine given the spec.

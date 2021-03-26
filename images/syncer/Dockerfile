@@ -1,5 +1,5 @@
 # This build arg allows the specification of a custom base image.
-FROM gcr.io/distroless/static:latest
+FROM ubuntu:18.04
 LABEL maintainers="ics-dev-team"
 
 COPY ./syncer /bin/incloudsphere-syncer
