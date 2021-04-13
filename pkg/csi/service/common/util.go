@@ -81,6 +81,17 @@ func DeleteVolumeUtil(ctx context.Context, manager *Manager, volumeId string, de
 	return nil
 }
 
+// ExpandVolumeUtil is the helper function to expand CNS volume for given volumeId
+func ExpandVolumeUtil(ctx context.Context, manager *Manager, volumeId string, capacityInGb float64) error {
+	err := manager.VolumeManager.ExpandVolume(volumeId, capacityInGb)
+	if err != nil {
+		return err
+	}
+
+	klog.V(4).Infof("Successfully expand volume %s", volumeId)
+	return nil
+}
+
 // GetVCenter returns VirtualCenter object from specified Manager object.
 // Before returning VirtualCenter object, vcenter connection is established if session doesn't exist.
 func GetVCenter(ctx context.Context, manager *Manager) (*ics.VirtualCenter, error) {

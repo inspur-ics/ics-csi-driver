@@ -33,6 +33,8 @@ type VolumeManager interface {
 	CreateVolume(req types.VolumeReq) (string, error)
 	// DeleteVolume deletes a volume given its spec.
 	DeleteVolume(volumeId string, deleteVolume bool) error
+	// ExpandVolume expands a volume given its spec.
+	ExpandVolume(volumeId string, capacityInGb float64) error
 	// AttachVolume attaches a volume to a virtual machine given the spec.
 	AttachVolume(vm *VirtualMachine, volumeId string) (string, error)
 	// DetachVolume detaches a volume from the virtual machine given the spec.
@@ -155,6 +157,50 @@ func (m *volumeManager) DeleteVolume(volumeId string, deleteVolume bool) error {
 		return errors.New(errMsg)
 	}
 	klog.V(5).Infof("Delete volume %s task finished", volumeId)
+	return nil
+}
+
+// ExpandVolume expands a volume given id.
+func (m *volumeManager) ExpandVolume(volumeId string, capacityInGb float64) error {
+	err := validateManager(m)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	err = m.virtualCenter.Connect(ctx)
+	if err != nil {
+		klog.Errorf("iCenter Connect failed with err: %+v", err)
+		return err
+	}
+
+	volService := icsvol.NewVolumeService(m.virtualCenter.Client)
+	volInfo, err := volService.GetVolumeInfoById(ctx, volumeId)
+	if err != nil {
+		klog.Errorf("Get volume %s info failed with err: %+v", volumeId, err)
+		return err
+	}
+
+	volInfo.Size = capacityInGb
+	task, err := volService.SetVolume(ctx, volumeId, volInfo)
+	if err != nil {
+		klog.Errorf("Expand volume %s failed with err: %+v", volumeId, err)
+		return err
+	}
+
+	klog.V(5).Infof("Expanding volume %s task info: %+v", volumeId, task)
+	taskState, err := GetTaskState(ctx, m.virtualCenter, &task)
+	if err != nil {
+		klog.Errorf("Expand volume %s task failed with err: %+v", volumeId, err)
+		return err
+	} else if taskState != "FINISHED" {
+		errMsg := fmt.Sprintf("Expand volume task state %s", taskState)
+		klog.Errorf(errMsg)
+		return errors.New(errMsg)
+	}
+
+	klog.V(5).Infof("Expand volume %s task finished", volumeId)
 	return nil
 }
 

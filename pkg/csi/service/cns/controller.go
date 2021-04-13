@@ -366,6 +366,30 @@ func (c *controller) ListSnapshots(ctx context.Context, req *csi.ListSnapshotsRe
 func (c *controller) ControllerExpandVolume(ctx context.Context, req *csi.ControllerExpandVolumeRequest) (
 	*csi.ControllerExpandVolumeResponse, error) {
 
-	klog.V(4).Infof("ControllerExpandVolume: called with args %+v", *req)
+	klog.V(5).Infof("ControllerExpandVolume: called with args %+v", *req)
+
+	volumeID := req.GetVolumeId()
+	volSizeBytes := int64(req.GetCapacityRange().GetRequiredBytes())
+	volSizeGB := float64(common.RoundUpSize(volSizeBytes, common.GbInBytes))
+
+	err := common.ExpandVolumeUtil(ctx, c.manager, volumeID, volSizeGB)
+	if err != nil {
+		msg := fmt.Sprintf("failed to expand volume: %q to size: %d with error: %+v", volumeID, volSizeGB, err)
+		klog.Error(msg)
+		return nil, status.Errorf(codes.Internal, msg)
+	}
+
+	nodeExpansionRequired := true
+	// Node expansion is not required for raw block volumes
+	if _, ok := req.GetVolumeCapability().GetAccessType().(*csi.VolumeCapability_Block); ok {
+		nodeExpansionRequired = false
+	}
+	resp := &csi.ControllerExpandVolumeResponse{
+		CapacityBytes:         int64(volSizeGB * float64(common.GbInBytes)),
+		NodeExpansionRequired: nodeExpansionRequired,
+	}
+
+	klog.V(5).Infof("ControllerExpandVolume: resp %+v", *resp)
+
 	return nil, status.Error(codes.Unimplemented, "")
 }
