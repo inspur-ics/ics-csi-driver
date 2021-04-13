@@ -39,6 +39,18 @@ spec:
           volumeMounts:
             - mountPath: /csi
               name: socket-dir
+        - name: csi-resizer
+          image: quay.io/k8scsi/csi-resizer:v1.1.0
+          args:
+            - "--v=5"
+            - "--timeout=300s"
+            - "--csi-address=$(ADDRESS)"
+          env:
+            - name: ADDRESS
+              value: /csi/csi.sock
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
         - name: ics-csi-controller
           image: ics-csi-driver:latest
           imagePullPolicy: IfNotPresent

@@ -1,8 +1,8 @@
-# This build arg allows the specification of a custom base image.
-FROM ubuntu:18.04
+FROM  alpine:latest
 LABEL maintainers="ics-dev-team"
+LABEL description="IncloudSphere CSI Syncer Driver"
 
-COPY ./syncer /bin/incloudsphere-syncer
+COPY ./syncer /bin/ics-csi-syncer
 
-ENTRYPOINT ["/bin/incloudsphere-syncer"]
+ENTRYPOINT ["/bin/ics-csi-syncer"]
 

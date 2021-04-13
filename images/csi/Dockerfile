@@ -8,7 +8,7 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY ./icsphere-csi /bin/incloudsphere-csi
+COPY ./icsphere-csi /bin/ics-csi-driver
 
-ENTRYPOINT ["/bin/incloudsphere-csi"]
+ENTRYPOINT ["/bin/ics-csi-driver"]
 
