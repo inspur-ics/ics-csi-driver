@@ -7,5 +7,5 @@ metadata:
 provisioner: csi.incloudsphere.inspur.com
 allowVolumeExpansion: true
 parameters:
-  datastoreurl: "8a878bda6f6f3ca4016f6f458b50003c"
+  datastoreurl: "8ab0b28d77be994a0177bea19e1d0078"
   fstype: "ext4" 

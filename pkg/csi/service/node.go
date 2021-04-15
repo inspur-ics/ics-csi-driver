@@ -33,11 +33,14 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
+	"k8s.io/kubernetes/pkg/util/mount"
+	"k8s.io/kubernetes/pkg/util/resizefs"
 	k8svol "k8s.io/kubernetes/pkg/volume"
 	"k8s.io/kubernetes/pkg/volume/util/fs"
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -331,6 +334,96 @@ func (s *service) NodeUnpublishVolume(
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
 
+func (s *service) NodeExpandVolume(
+	ctx context.Context,
+	req *csi.NodeExpandVolumeRequest) (
+	*csi.NodeExpandVolumeResponse, error) {
+	klog.V(5).Infof("NodeExpandVolume: called with args %+v", *req)
+
+	volumeID := req.GetVolumeId()
+	if len(volumeID) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "volume id must be provided")
+	} else if req.GetCapacityRange() == nil {
+		return nil, status.Error(codes.InvalidArgument, "capacity range must be provided")
+	} else if req.GetCapacityRange().GetRequiredBytes() < 0 || req.GetCapacityRange().GetLimitBytes() < 0 {
+		return nil, status.Error(codes.InvalidArgument, "capacity ranges values cannot be negative")
+	}
+
+	reqVolSizeBytes := int64(req.GetCapacityRange().GetRequiredBytes())
+	reqVolSizeMB := int64(common.RoundUpSize(reqVolSizeBytes, common.MbInBytes))
+
+	// TODO: In CSI spec 1.2, NodeExpandVolume will be
+	// passing in a staging_target_path which is more precise
+	// than volume_path. Use the new staging_target_path
+	// instead of the volume_path when it is supported by Kubernetes.
+
+	volumePath := req.GetVolumePath()
+	if len(volumePath) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "volume path must be provided to expand volume on node")
+	}
+
+	// Look up block device mounted to staging target path
+	dev, err := getDevFromMount(volumePath)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal,
+			"error getting block device for volume: %q, err: %v",
+			volumeID, err)
+	} else if dev == nil {
+		return nil, status.Errorf(codes.Internal,
+			"volume %q is not mounted at the path %s",
+			volumeID, volumePath)
+	}
+	klog.V(5).Infof("NodeExpandVolume: staging target path %s, getDevFromMount %+v", volumePath, *dev)
+
+	realMounter := mount.New("")
+	realExec := mount.NewOsExec()
+	mounter := &mount.SafeFormatAndMount{
+		Interface: realMounter,
+		Exec:      realExec,
+	}
+
+	// Fetch the current block size
+	currentBlockSizeBytes, err := getBlockSizeBytes(mounter, dev.RealDev)
+	if err != nil {
+		return nil, status.Error(codes.Internal, fmt.Sprintf("error when getting size of block volume at path %s: %v", dev.RealDev, err))
+	}
+	// Check if a rescan is required
+	if currentBlockSizeBytes < reqVolSizeBytes {
+		// If a device is expanded while it is attached to a VM, we need to rescan
+		// the device on the guest OS in order to see the modified size on the Guest OS
+		err = rescanDevice(ctx, dev)
+		if err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+	}
+
+	// Resize file system
+	resizer := resizefs.NewResizeFs(mounter)
+	_, err = resizer.Resize(dev.RealDev, volumePath)
+	if err != nil {
+		return nil, status.Error(codes.Internal, fmt.Sprintf("error when resizing filesystem on volume %q on node: %v", volumeID, err))
+	}
+	klog.V(5).Infof("NodeExpandVolume: Resized filesystem with devicePath %s volumePath %s", dev.RealDev, volumePath)
+
+	// Check the block size
+	currentBlockSizeBytes, err = getBlockSizeBytes(mounter, dev.RealDev)
+	if err != nil {
+		return nil, status.Error(codes.Internal, fmt.Sprintf("error when getting size of block volume at path %s: %v", dev.RealDev, err))
+	}
+	// NOTE: Make sure new size is greater than or equal to the
+	// requested size. It is possible for volume size to be rounded up
+	// and therefore bigger than the requested size.
+	if currentBlockSizeBytes < reqVolSizeBytes {
+		return nil, status.Errorf(codes.Internal, "requested volume size was %d, but got volume with size %d", reqVolSizeBytes, currentBlockSizeBytes)
+	}
+
+	klog.V(2).Infof("NodeExpandVolume: expanded volume successfully. devicePath %s volumePath %s size %d", dev.RealDev, volumePath, int64(reqVolSizeMB*common.MbInBytes))
+
+	return &csi.NodeExpandVolumeResponse{
+		CapacityBytes: int64(reqVolSizeMB * common.MbInBytes),
+	}, nil
+}
+
 func (s *service) NodeGetVolumeStats(
 	ctx context.Context,
 	req *csi.NodeGetVolumeStatsRequest) (
@@ -450,6 +543,13 @@ func (s *service) NodeGetCapabilities(
 			{
 				Type: &csi.NodeServiceCapability_Rpc{
 					Rpc: &csi.NodeServiceCapability_RPC{
+						Type: csi.NodeServiceCapability_RPC_EXPAND_VOLUME,
+					},
+				},
+			},
+			{
+				Type: &csi.NodeServiceCapability_Rpc{
+					Rpc: &csi.NodeServiceCapability_RPC{
 						Type: csi.NodeServiceCapability_RPC_GET_VOLUME_STATS,
 					},
 				},
@@ -536,15 +636,6 @@ func (s *service) NodeGetInfo(
 		NodeId:             nodeID,
 		AccessibleTopology: topology,
 	}, nil
-}
-
-func (s *service) NodeExpandVolume(
-	ctx context.Context,
-	req *csi.NodeExpandVolumeRequest) (
-	*csi.NodeExpandVolumeResponse, error) {
-
-	klog.V(5).Infof("NodeExpandVolume: called with args %+v", *req)
-	return nil, status.Error(codes.Unimplemented, "")
 }
 
 func publishMountVol(
@@ -743,6 +834,44 @@ func getDiskPath(id string, files []os.FileInfo) (string, error) {
 	}
 
 	return "", nil
+}
+
+func rescanDevice(ctx context.Context, dev *Device) error {
+	devRescanPath, err := getDeviceRescanPath(dev)
+	if err != nil {
+		return err
+	}
+
+	err = ioutil.WriteFile(devRescanPath, []byte{'1'}, 0666)
+	if err != nil {
+		msg := fmt.Sprintf("error rescanning block device %q. %v", dev.RealDev, err)
+		klog.Error(msg)
+		return fmt.Errorf(msg)
+	}
+	return nil
+}
+
+func getDeviceRescanPath(dev *Device) (string, error) {
+	// A typical dev.RealDev path looks like `/dev/sda`. To rescan a block
+	// device we need to write into `/sys/block/$DEVICE/device/rescan`
+	parts := strings.Split(dev.RealDev, "/")
+	if len(parts) == 3 && strings.HasPrefix(parts[1], "dev") {
+		return filepath.EvalSymlinks(filepath.Join("/sys/block", parts[2], "device", "rescan"))
+	}
+	return "", fmt.Errorf("illegal path for device %q", dev.RealDev)
+}
+
+func getBlockSizeBytes(mounter *mount.SafeFormatAndMount, devicePath string) (int64, error) {
+	output, err := mounter.Exec.Run("blockdev", "--getsize64", devicePath)
+	if err != nil {
+		return -1, fmt.Errorf("error when getting size of block volume at path %s: output: %s, err: %v", devicePath, string(output), err)
+	}
+	strOut := strings.TrimSpace(string(output))
+	gotSizeBytes, err := strconv.ParseInt(strOut, 10, 64)
+	if err != nil {
+		return -1, fmt.Errorf("failed to parse size %s into int a size", strOut)
+	}
+	return gotSizeBytes, nil
 }
 
 func contains(list []string, item string) bool {
