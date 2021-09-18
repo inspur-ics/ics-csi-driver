@@ -32,7 +32,7 @@ require (
 	github.com/container-storage-interface/spec v1.2.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/go-resty/resty v1.12.0 // indirect
-	github.com/inspur-ics/ics-go-sdk v0.0.0-20210412121239-0e313d1f6fb5
+	github.com/inspur-ics/ics-go-sdk v1.0.3
 	github.com/rexray/gocsi v1.1.0
 	google.golang.org/grpc v1.26.0
 	gopkg.in/gcfg.v1 v1.2.3

@@ -243,7 +243,10 @@ func (m *volumeManager) AttachVolume(vm *VirtualMachine, volumeId string) (strin
 			disk.Volume.DiskType = "SAS"
 		}
 	}
+	vmInfo.Floppy = nil
 	vmInfo.VncPasswd = "00000000"
+	klog.V(4).Infof("Set floppy config to nil for vm %v", vm)
+
 	klog.V(4).Infof("Attaching volume %s to VM %v", volumeId, vm)
 
 	vmService := icsvm.NewVirtualMachineService(m.virtualCenter.Client)
@@ -312,7 +315,9 @@ func (m *volumeManager) DetachVolume(vm *VirtualMachine, volumeId string) error 
 		return errors.New(errMsg)
 	}
 
+	vmInfo.Floppy = nil
 	vmInfo.VncPasswd = "00000000"
+	klog.V(4).Infof("Set floppy config to nil for vm %v", vm)
 	klog.V(4).Infof("Detaching volume %s from VM %v", volumeId, vm)
 
 	vmService := icsvm.NewVirtualMachineService(m.virtualCenter.Client)
