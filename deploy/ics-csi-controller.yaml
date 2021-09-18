@@ -32,6 +32,7 @@ spec:
           args:
             - "--v=5"
             - "--timeout=300s"
+            - "--leader-election"
             - "--csi-address=$(ADDRESS)"
           env:
             - name: ADDRESS
@@ -44,6 +45,7 @@ spec:
           args:
             - "--v=5"
             - "--timeout=300s"
+            - "--leader-election"
             - "--csi-address=$(ADDRESS)"
           env:
             - name: ADDRESS
@@ -102,6 +104,7 @@ spec:
           args:
             - "--v=5"
             - "--timeout=300s"
+            - "--leader-election"
             - "--csi-address=$(ADDRESS)"
             # needed only for topology aware setup
             #- "--feature-gates=Topology=true"
@@ -116,6 +119,7 @@ spec:
           image: ics-csi-syncer:latest
           args:
             - "--v=5"
+              #- "--leader-election"
           imagePullPolicy: IfNotPresent
           env:
             - name: FULL_SYNC_INTERVAL_MINUTES
